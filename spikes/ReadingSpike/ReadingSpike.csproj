@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibNMeCab" Version="0.10.2" />
+    <PackageReference Include="LibNMeCab.IpaDicBin" Version="0.10.0" />
+    <PackageReference Include="Lucene.Net.Analysis.Kuromoji" Version="4.8.0-beta00018" />
+    <PackageReference Include="MeCab.DotNet" Version="1.2.0" />
+  </ItemGroup>
+
+  <!--
+    LibNMeCab.IpaDicBin と MeCab.DotNet は同じ名前の MSBuild プロパティ（MeCabPackageDefaultContentPath）を使うため、
+    両方を参照すると MeCab.DotNet の辞書がコピーされない。比較のために手動でコピーする。
+  -->
+  <ItemGroup>
+    <Content Include="$(NuGetPackageRoot)mecab.dotnet/1.2.0/content/dic/*.*">
+      <Link>dic/%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

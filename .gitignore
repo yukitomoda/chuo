@@ -1,0 +1,9 @@
+# .NET のビルド成果物
+bin/
+obj/
+*.user
+.vs/
+
+# エディタ
+.idea/
+.vscode/
