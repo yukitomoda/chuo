@@ -15,13 +15,16 @@ namespace WinLauncherSpike;
 public sealed class LauncherWindow : Window
 {
     private const double WindowWidth = 680;
-    private const double WindowHeight = 420;
+    private const double WindowHeight = 560;
     private const double ImeGuardMs = 500;
 
     private readonly SpikeLog _log;
     private readonly SpikeOptions _options;
     private readonly TextBox _input;
     private readonly TextBlock _status;
+    private readonly ListBox _results;
+    private readonly IReadOnlyList<ResultItem> _items;
+    private int _filterCount;
     private bool? _imeStatusBeforeShow;
     private bool _prewarming;
     private bool _hiding;
@@ -50,11 +53,15 @@ public sealed class LauncherWindow : Window
         };
 
         // 結果の一覧の描画コストを本番に近づけるためのダミーの項目
-        var results = new ListBox
+        _items = ResultList.CreateItems();
+        _results = new ListBox
         {
-            ItemsSource = Enumerable.Range(1, 8).Select(i => $"ダミーの結果 {i}").ToList(),
+            ItemsSource = ResultList.Filter(_items, null),
+            ItemTemplate = ResultList.CreateItemTemplate(),
+            SelectedIndex = 0,
             Margin = new Thickness(12, 0),
         };
+        _input.TextChanged += (_, _) => OnInputChanged();
 
         _status = new TextBlock
         {
@@ -69,7 +76,7 @@ public sealed class LauncherWindow : Window
         DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(_input);
         root.Children.Add(_status);
-        root.Children.Add(results);
+        root.Children.Add(_results);
         Content = root;
 
         KeyDown += OnKeyDown;
@@ -169,6 +176,27 @@ public sealed class LauncherWindow : Window
             $"表示 {SpikeLog.Ms(dispatched, shown):F1}ms／描画 {SpikeLog.Ms(shown, rendered):F1}ms）\n" +
             $"前面={isForeground} フォーカス={isFocused} IME: 表示前={Format(_imeStatusBeforeShow)} → 表示後={Format(imeStatusAfter)}\n" +
             $"{SpikeLog.MemorySummary()}\nログ: {_log.FilePath}";
+    }
+
+    /// <summary>入力が変わったら一覧を差し替え、描画が終わるまでの時間を記録する（キーを押してから結果が見えるまでの時間に当たる）。</summary>
+    private async void OnInputChanged()
+    {
+        var start = Stopwatch.GetTimestamp();
+        var filtered = ResultList.Filter(_items, _input.Text);
+        _results.ItemsSource = filtered;
+        _results.SelectedIndex = 0;
+        var updated = Stopwatch.GetTimestamp();
+
+        if (!IsVisible || _prewarming)
+        {
+            return;
+        }
+
+        var count = ++_filterCount;
+        await WaitForFramesAsync(2);
+        var rendered = Stopwatch.GetTimestamp();
+        _log.Write($"filter #{count}: total={SpikeLog.Ms(start, rendered):F1}ms " +
+                   $"(update={SpikeLog.Ms(start, updated):F1}ms render={SpikeLog.Ms(updated, rendered):F1}ms) items={filtered.Count}");
     }
 
     /// <summary>

@@ -35,6 +35,7 @@ dotnet publish -c Release -r win-x64 --self-contained -o publish
 - 計測結果はウィンドウ下部と `%LOCALAPPDATA%\chuo-spike\spike.log` に出る。
 - `show #n: total=...` の内訳：`queue`（WM_HOTKEY がキューに積まれてから取り出されるまで）、`dispatch`（UI スレッドへの転送）、`show`（Show、Activate、フォーカス、IME の操作）、`render`（2フレーム目の描画まで）。
 - メモリは `workingSet`（ワーキングセット）、`private`（コミット済みのプライベートメモリ）、`privateWS`（プライベートワーキングセット。タスクマネージャーの「メモリ」列）、`managedHeap` を出す。非表示にしてから1秒後の値も `hidden(1s)` として出す。
+- 結果の一覧には、アイコン（64px を 32px に縮小）と2行のテキストを持つダミーの項目を最大 30 件並べる。入力欄に文字を打つたびに別の項目に差し替え、`filter #n: total=...`（一覧の差し替えから2フレーム目の描画まで）を出す。
 - IME の調査用に、`imeNow(imm=... imewnd=...)`（2つの方法で読んだ状態）、`wndproc`（表示から1秒間の WM_IME_SETCONTEXT と IMN_SETOPENSTATUS）、`ime-guard`（オンに戻されたのを検知してオフにした記録）を出す。
 
 ### 確認したいこと
