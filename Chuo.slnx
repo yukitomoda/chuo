@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/plugins/">
+    <Project Path="plugins/Chuo.Plugins.Calculator/Chuo.Plugins.Calculator.csproj" />
+    <Project Path="plugins/Chuo.Plugins.WebSearch/Chuo.Plugins.WebSearch.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Chuo.Abstractions/Chuo.Abstractions.csproj" />
+    <Project Path="src/Chuo.App/Chuo.App.csproj" />
+    <Project Path="src/Chuo.Core/Chuo.Core.csproj" />
+    <Project Path="src/Chuo.Platform.Linux/Chuo.Platform.Linux.csproj" />
+    <Project Path="src/Chuo.Platform.Windows/Chuo.Platform.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Chuo.Core.Tests/Chuo.Core.Tests.csproj" />
+  </Folder>
+</Solution>

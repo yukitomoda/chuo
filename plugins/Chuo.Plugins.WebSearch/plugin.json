@@ -1,0 +1,7 @@
+{
+  "id": "chuo.websearch",
+  "name": "Web 検索",
+  "version": "1.0.0",
+  "entry": "Chuo.Plugins.WebSearch.dll",
+  "hostApi": "1.x"
+}

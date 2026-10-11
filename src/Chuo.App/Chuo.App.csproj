@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>chuo</AssemblyName>
+    <RootNamespace>Chuo.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- プラグインを動的に読み込むため、NativeAOT ではなく ReadyToRun を使う（要件定義書 2 章） -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Chuo.Core\Chuo.Core.csproj" />
+    <ProjectReference Include="..\Chuo.Platform.Windows\Chuo.Platform.Windows.csproj" />
+    <ProjectReference Include="..\Chuo.Platform.Linux\Chuo.Platform.Linux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <!--
+    同梱プラグインを、出力先の plugins/<プロジェクト名>/ に発行する。
+    本体の発行時の RuntimeIdentifier や SelfContained はプラグインに引き継がない（ランタイムは本体のものを使う）。
+  -->
+  <ItemGroup>
+    <BundledPlugin Include="..\..\plugins\*\*.csproj" />
+    <!-- 復元とビルドの順序のためだけに参照する（アセンブリは参照しない） -->
+    <ProjectReference Include="@(BundledPlugin)" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <Target Name="BuildBundledPlugins" AfterTargets="Build">
+    <MSBuild Projects="@(BundledPlugin)" Targets="Publish"
+             Properties="Configuration=$(Configuration);PublishDir=$([System.IO.Path]::GetFullPath('$(OutDir)'))plugins/%(BundledPlugin.Filename)/"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishReadyToRun;_IsPublishing" />
+  </Target>
+
+  <Target Name="PublishBundledPlugins" AfterTargets="Publish">
+    <MSBuild Projects="@(BundledPlugin)" Targets="Publish"
+             Properties="Configuration=$(Configuration);PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)'))plugins/%(BundledPlugin.Filename)/"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishReadyToRun;_IsPublishing" />
+  </Target>
+
+</Project>

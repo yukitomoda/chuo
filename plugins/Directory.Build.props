@@ -1,0 +1,16 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..'))" />
+
+  <PropertyGroup>
+    <!-- 依存するアセンブリも出力先にそろえ、ALC で解決できるようにする -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Chuo.Abstractions はホストと共有するので、プラグインのフォルダには置かない -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Chuo.Abstractions\Chuo.Abstractions.csproj" Private="false" ExcludeAssets="runtime" />
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

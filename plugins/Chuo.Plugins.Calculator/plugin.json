@@ -1,0 +1,7 @@
+{
+  "id": "chuo.calculator",
+  "name": "電卓",
+  "version": "1.0.0",
+  "entry": "Chuo.Plugins.Calculator.dll",
+  "hostApi": "1.x"
+}

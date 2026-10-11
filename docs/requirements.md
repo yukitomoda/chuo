@@ -92,9 +92,11 @@ chuo は、クロスプラットフォームで動作し、容易に拡張でき
 [CatalogProvider(Keyword = "f", IncludeInGlobal = false)]
 public sealed class FileCatalog : ICatalogProvider { ... }
 
-[QueryProvider(Keyword = "=", GlobalTrigger = @"^[\d\s+\-*/().]+$")]
-public sealed class Calculator : IQueryProvider { ... }
+[LiveQueryProvider(Keyword = "=", GlobalTrigger = @"^[\d\s+\-*/().]+$")]
+public sealed class Calculator : ILiveQueryProvider { ... }
 ```
+
+- ライブクエリ型のインターフェイスは `ILiveQueryProvider` とする（`IQueryProvider` だと、暗黙の using に含まれる `System.Linq.IQueryProvider` と名前が衝突するため）。
 
 - 属性で指定したキーワードなどは**既定値**であり、ユーザーが設定画面で上書きできる。
 

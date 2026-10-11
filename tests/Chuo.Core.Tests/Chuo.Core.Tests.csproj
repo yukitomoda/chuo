@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Chuo.Core\Chuo.Core.csproj" />
+    <ProjectReference Include="..\..\plugins\Chuo.Plugins.Calculator\Chuo.Plugins.Calculator.csproj" />
+  </ItemGroup>
+
+  <!-- プラグインの読み込みのテストのため、電卓のプラグインを出力先の plugins/ に発行する -->
+  <Target Name="PublishTestPlugins" AfterTargets="Build">
+    <MSBuild Projects="..\..\plugins\Chuo.Plugins.Calculator\Chuo.Plugins.Calculator.csproj" Targets="Publish"
+             Properties="Configuration=$(Configuration);PublishDir=$([System.IO.Path]::GetFullPath('$(OutDir)'))plugins/Chuo.Plugins.Calculator/"
+             RemoveProperties="RuntimeIdentifier;SelfContained;_IsPublishing" />
+  </Target>
+
+</Project>

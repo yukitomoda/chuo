@@ -1,0 +1,6 @@
+<Project>
+  <!-- 検証用のコードはパッケージのバージョンを各プロジェクトで指定する -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>
