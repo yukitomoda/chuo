@@ -32,7 +32,7 @@ chuo は、クロスプラットフォームで動作し、容易に拡張でき
 | 本体の構成 | 汎用ホスト（`Microsoft.Extensions.Hosting`） |
 | 本体のビルド | ReadyToRun（プラグインを動的に読み込むため、NativeAOT は使わない） |
 | CLI クライアント | NativeAOT |
-| 設定ファイル | YAML（`NetEscapades.Configuration.Yaml` などのプロバイダと YamlDotNet） |
+| 設定ファイル | JSON（`System.Text.Json`。読み込みは `Microsoft.Extensions.Configuration.Json`） |
 | アプリが書き込むデータ | SQLite（`Microsoft.Data.Sqlite`） |
 
 ### ソリューション構成
@@ -64,7 +64,7 @@ chuo は、クロスプラットフォームで動作し、容易に拡張でき
 |---|---|---|
 | 同梱プラグイン | 本体のフォルダの `plugins/` | ビルド時に埋め込んだハッシュと一致すること |
 | ユーザーが追加したプラグイン | データフォルダの `plugins/` | 承認リストに記録された「プラグイン ID＋フォルダ全体のハッシュ」と一致すること |
-| 開発中のプラグイン | `settings.yaml` で明示的に登録したパス | ハッシュは検証しない。ホットリロードを有効にする |
+| 開発中のプラグイン | 設定画面で明示的に登録したパス | ハッシュは検証しない。ホットリロードを有効にする |
 
 - 新しく見つかったプラグインや、内容が変更されたプラグインは「未承認」として通知する。`chuo plugin trust <id>` または UI 上の通知から承認したときに、承認リストに記録する。
 - `chuo plugin add <フォルダ>` で、データフォルダへのコピーと承認をまとめて行う。
@@ -96,7 +96,7 @@ public sealed class FileCatalog : ICatalogProvider { ... }
 public sealed class Calculator : IQueryProvider { ... }
 ```
 
-- 属性で指定したキーワードなどは**既定値**であり、ユーザーが `settings.yaml` で上書きできる。
+- 属性で指定したキーワードなどは**既定値**であり、ユーザーが設定画面で上書きできる。
 
 ### 3.4 構成方法とライフサイクル
 
@@ -119,7 +119,8 @@ public sealed class ClipboardPlugin : IChuoPlugin
 - 常駐処理は `IHostedService` / `BackgroundService` で書く。
 - 本体のサービス（`IClipboard`、`ILauncher`、`IShell`、`IPluginStorage`、`ILogger<T>` など）は、プラグインのホストにインスタンスを中継して登録する。
 - アンロードは `StopAsync()`、`Dispose()`、`ALC.Unload()` の順に行う。
-- プラグインの設定は `settings.yaml` の `plugins.<id>` のセクションを `IConfiguration` として渡し、`IOptionsMonitor<T>` で即座に反映する。
+- プラグインの設定は `settings.json` の `plugins.<id>` のセクションを `IConfiguration` として渡し、`IOptionsMonitor<T>` で即座に反映する。
+- プラグインの設定画面は、ホストが Options クラスから自動で生成する（「10.2 プラグインの設定画面」を参照）。
 
 ### 3.5 開発体験
 
@@ -197,7 +198,7 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 - 拡張が無効な場合やポータルに非対応の環境では、デスクトップ環境の設定でショートカットを作り、`chuo toggle` を呼んでもらう（予備手段）。
 - **`chuo` コマンド**は NativeAOT でビルドした軽量クライアントとする。IPC（`NamedPipeServerStream`。Windows では名前付きパイプ、Unix ではドメインソケットとして動く）で本体にコマンドを送る。
   - 本体は1つだけ常駐させる。2つめ以降に起動された `chuo` は、コマンドを送る側として動いて終了する。
-  - コマンドの例：`toggle`、`show --query "f "`、`config`、`install`、`plugin add` / `plugin trust`、`bench`
+  - コマンドの例：`toggle`、`show --query "f "`、`config`（設定画面を開く）、`install`、`plugin add` / `plugin trust`、`bench`
 - **非機能要件：** ホットキーを押してから、ウィンドウが表示されて入力を受け付けるまで **50ms 以内**（暫定の目標）。`chuo bench` で計測し、実際に使いながら見直す。
 
 ## 6. 結果の項目とアクション
@@ -226,15 +227,17 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 
 ## 7. 項目ごとのユーザー設定（エイリアス、お気に入り、無視）
 
-項目ごとのユーザー設定は `items.yaml` にまとめて保存する。アプリが書き換えるファイルであり、手で編集することもできる。手で編集した場合は自動で再読み込みする。
+項目ごとのユーザー設定は `items.json` にまとめて保存する。アプリが書き換えるファイルであり、手で編集することもできる。手で編集した場合は自動で再読み込みする。
 
-```yaml
-chuo.apps:firefox.desktop:
-  aliases: [ff, web]
-  favorite: 1          # お気に入りの表示順
-chuo.apps:uninstall-foo.desktop:
-  ignore: true
+```json
+{
+  "chuo.apps:firefox.desktop": { "aliases": ["ff", "web"], "favorite": 1 },
+  "chuo.apps:uninstall-foo.desktop": { "ignore": true }
+}
 ```
+
+- `favorite` はお気に入りの表示順を表す。
+- 登録はランチャーの画面の中（アクションパネルやショートカットキー）で行う。設定画面の「項目」のページでも、エイリアス、お気に入り、無視の一覧を確認し、編集や削除ができる。
 
 ### 7.1 エイリアス
 
@@ -244,7 +247,7 @@ chuo.apps:uninstall-foo.desktop:
 
 ### 7.2 お気に入り
 
-- ランチャーの画面の中で管理する。専用の管理ウィンドウは作らない。
+- 追加と並べ替えはランチャーの画面の中で行う。設定画面でも一覧で確認し、並べ替えや削除ができる。
 
 | 操作 | 方法 |
 |---|---|
@@ -257,7 +260,7 @@ chuo.apps:uninstall-foo.desktop:
 ### 7.3 無視
 
 - アクションパネルの「無視する」で、項目を ID 単位で除外する。
-- `settings.yaml` の `ignore` に glob パターン（例：`chuo.apps:*uninstall*`）を書いて、まとめて除外することもできる。
+- 設定画面で glob パターン（例：`chuo.apps:*uninstall*`）を登録して、まとめて除外することもできる。
 - 無視の判定はホストが行い、カタログ型とライブクエリ型の両方の結果に適用する。
 - `:ignored` の一覧で無視した項目を確認でき、アクションパネルの「無視を解除」で元に戻せる。
 
@@ -275,7 +278,7 @@ chuo.apps:uninstall-foo.desktop:
 
 ### 8.4 ファイル検索
 
-- 対象は `settings.yaml` で指定したフォルダだけとし、自前のインデックスを持つ。
+- 対象は設定画面で指定したフォルダだけとし、自前のインデックスを持つ。
 - 起動時にスキャンし、その後は `FileSystemWatcher` で差分を反映する。
 - 既定の除外パターン：`.gitignore` の内容に従い、さらに `.git`、`node_modules`、`bin`、`obj` などを除外する。設定で追加や上書きができる。
 - 既定では `f` キーワードを付けたときだけ検索対象とし、全体検索に含めるかどうかは設定で切り替えられる。
@@ -300,19 +303,20 @@ chuo.apps:uninstall-foo.desktop:
 - プレビューは宣言的なデータとして返し、描画はホストが行う。プラグインが UI のコントロールを返すことはしない。
   - 種類：`TextPreview`、`ImagePreview`、`FilePreview`、`PropertiesPreview`
   - プレビューは項目を選択したときに初めて取得する（`Func<CancellationToken, Task<Preview>>`）。
-- テーマは OS のライト／ダークの設定に従い、`settings.yaml` で上書きできる。
+- テーマは OS のライト／ダークの設定に従い、設定画面で上書きできる。
 - ウィンドウの表示位置、最大表示件数などは既定値を決めたうえで、設定で変更できるようにする。
 
 ## 10. 設定とデータ
 
 | 種類 | ファイル | 編集方法 |
 |---|---|---|
-| 設定 | `settings.yaml` | 手で編集する。保存すると自動で再読み込みされる |
-| 項目ごとのユーザー設定 | `items.yaml` | アプリが書き込む。手で編集することもできる |
+| 設定 | `settings.json` | 設定画面で編集する。手で編集することもでき、保存すると自動で再読み込みされる |
+| 項目ごとのユーザー設定 | `items.json` | アプリが書き込む。手で編集することもできる |
 | 使用履歴、承認リスト | SQLite | アプリのみが書き込む |
 | ログ | `logs/` | アプリが書き込む。日ごとにファイルを切り替え、プラグインごとにカテゴリを分ける |
 
-- 設定ファイルの入力補完のために JSON Schema を生成する。ファイルの先頭に `# yaml-language-server: $schema=...` を書いて利用する。
+- アプリが設定ファイルを書き込むときは、一時ファイルに書いてから置き換える。自分の書き込みによる変更の通知では再読み込みしない。
+- 手で編集するときの入力補完（JSON Schema）は初版では作らない。
 - 保存場所は次のとおり。
 
 | OS | 設定 | データ |
@@ -320,7 +324,37 @@ chuo.apps:uninstall-foo.desktop:
 | Linux | `~/.config/chuo/` | `~/.local/share/chuo/` |
 | Windows | `%APPDATA%\chuo\` | `%APPDATA%\chuo\` |
 
-- GUI の設定画面は初版では作らない。`chuo config` で設定ファイルを既定のエディタで開く。
+### 10.1 設定画面
+
+- **すべての設定を設定画面で変更できるようにする**（ueli や Flow Launcher と同様）。設定ファイルを手で編集しないと変えられない設定は作らない。
+- 開き方：ランチャーの `:settings`、ランチャーを開いているときの Ctrl+,、`chuo config`
+- 設定画面はランチャーとは別のウィンドウとする。常駐するメモリを増やさないため、開いたときに生成し、閉じたら破棄する。
+- 変更はその場で反映する（保存ボタンは置かない）。ホットキーの登録に失敗した場合など、反映できなかったときは画面に表示する。
+
+| ページ | 内容 |
+|---|---|
+| 一般 | ホットキー、自動起動、テーマ、表示位置、最大表示件数、IME（`ime.offOnShow`） |
+| プラグイン | 一覧、有効・無効、未承認のプラグインの承認、キーワードと全体検索に含めるかの上書き、各プラグインの設定（10.2） |
+| 項目 | エイリアス、お気に入り、無視の一覧と編集、無視の glob パターン |
+| 開発 | 開発中のプラグインのパスの登録 |
+
+### 10.2 プラグインの設定画面
+
+- プラグインは UI のコントロールを返さない（「9. UI」の原則と同じ）。ホストが Options クラスのプロパティと属性から画面を自動で生成する。
+- 属性は `System.ComponentModel.DataAnnotations` を使う（`[Display(Name, Description, Order)]`、`[Range]` など）。フォルダやファイルの選択のように、標準の属性で表せないものは独自の属性を用意する。
+- 対応する型：`bool`、数値、`string`、列挙型（選択肢として表示）、パス、それらのリスト
+- プラグインは `ConfigureServices` で、設定画面に出す Options クラスを登録する。対応していない型のプロパティがある場合、ホストは読み込み時に警告を出す。
+
+```csharp
+public sealed class FileSearchOptions
+{
+    [Display(Name = "対象のフォルダ"), FolderPath]
+    public List<string> Folders { get; set; } = [];
+
+    [Display(Name = "全体検索に含める", Description = "オフにすると f キーワードを付けたときだけ検索する")]
+    public bool IncludeInGlobal { get; set; }
+}
+```
 
 ## 11. 配布とインストール
 
@@ -350,7 +384,7 @@ chuo.apps:uninstall-foo.desktop:
 |---|---|
 | GNOME の Wayland への対応を続けるかどうか | 技術検証（「14. 最初の作業」）の結果で判断する |
 | IME をオフにする具体的な方式、閉じたときに元の状態に戻すか | 技術検証で決める |
-| 2版以降の機能の優先順位 | X11 や KDE への対応、システム全体のファイル検索、GUI の設定画面など |
+| 2版以降の機能の優先順位 | X11 や KDE への対応、システム全体のファイル検索など |
 
 ## 14. 最初の作業（技術検証）
 
