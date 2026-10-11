@@ -72,56 +72,23 @@ chuo は、クロスプラットフォームで動作し、容易に拡張でき
 
 ### 3.3 メタデータ
 
-**パッケージの身元情報**は `plugin.json` に書く。承認時の表示や互換性チェックは、コードを実行せずにこのファイルで行う。
+**パッケージの身元情報**（ID、名前、バージョン、読み込むアセンブリ、対応するホスト API のバージョン）は、プラグインのフォルダにある `plugin.json` に書く。承認時の表示や互換性チェックは、コードを実行せずにこのファイルで行う。
 
-```json
-{
-  "id": "chuo.files",
-  "name": "File Search",
-  "version": "1.0.0",
-  "entry": "Chuo.Plugins.Files.dll",
-  "hostApi": "1.x"
-}
-```
+- 対応するホスト API のバージョンが本体と合わないプラグインは読み込まない。
 
-- `hostApi` がホスト API のバージョンと合わないプラグインは読み込まない。
+**機能の定義**（プロバイダの種類、キーワード、全体検索に含めるか）はプラグインのコードの中で宣言する。1つのプラグインに複数のプロバイダを含められる。
 
-**機能の定義**はコードの属性で行う。1つのプラグインに複数のプロバイダを含められる。
-
-```csharp
-[CatalogProvider(Keyword = "f", IncludeInGlobal = false)]
-public sealed class FileCatalog : ICatalogProvider { ... }
-
-[LiveQueryProvider(Keyword = "=", GlobalTrigger = @"^[\d\s+\-*/().]+$")]
-public sealed class Calculator : ILiveQueryProvider { ... }
-```
-
-- ライブクエリ型のインターフェイスは `ILiveQueryProvider` とする（`IQueryProvider` だと、暗黙の using に含まれる `System.Linq.IQueryProvider` と名前が衝突するため）。
-
-- 属性で指定したキーワードなどは**既定値**であり、ユーザーが設定画面で上書きできる。
+- コードで宣言したキーワードなどは**既定値**であり、ユーザーが設定画面で上書きできる。
 
 ### 3.4 構成方法とライフサイクル
 
 - 本体は汎用ホストで構築する。
-- プラグインごとに、専用の ALC の中で**ミニ汎用ホスト**（`Host.CreateEmptyApplicationBuilder`）を作る。
-
-```csharp
-public sealed class ClipboardPlugin : IChuoPlugin
-{
-    public void ConfigureServices(IServiceCollection services, IPluginContext ctx)
-    {
-        services.AddSingleton<ClipboardStore>();
-        services.AddHostedService<ClipboardWatcher>();
-        services.Configure<ClipboardOptions>(ctx.Configuration);
-    }
-}
-```
-
-- プロバイダは、ホストが属性をスキャンし、プラグインの子コンテナから生成する。プロバイダはコンストラクタで依存を受け取れる。
-- 常駐処理は `IHostedService` / `BackgroundService` で書く。
-- 本体のサービス（`IClipboard`、`ILauncher`、`IShell`、`IPluginStorage`、`ILogger<T>` など）は、プラグインのホストにインスタンスを中継して登録する。
-- アンロードは `StopAsync()`、`Dispose()`、`ALC.Unload()` の順に行う。
-- プラグインの設定は `settings.json` の `plugins.<id>` のセクションを `IConfiguration` として渡し、`IOptionsMonitor<T>` で即座に反映する。
+- プラグインごとに、専用の ALC の中で**ミニ汎用ホスト**を作る。プラグインは、そのホストにサービスを登録する形で構成する。
+- プロバイダはプラグインのコンテナから生成し、依存を注入できるようにする。
+- 常駐処理は汎用ホストのホステッドサービスとして書く。
+- 本体の機能（クリップボード、ランチャーの表示、ファイルやURLを開く、データの保存、ログなど）は、プラグインのホストに中継して使えるようにする。
+- アンロードは、ホストの停止、破棄、ALC のアンロードの順に行う。
+- プラグインの設定は `settings.json` のプラグインごとのセクションから読み、変更をその場で反映する。
 - プラグインの設定画面は、ホストが Options クラスから自動で生成する（「10.2 プラグインの設定画面」を参照）。
 
 ### 3.5 開発体験
@@ -343,20 +310,9 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 ### 10.2 プラグインの設定画面
 
 - プラグインは UI のコントロールを返さない（「9. UI」の原則と同じ）。ホストが Options クラスのプロパティと属性から画面を自動で生成する。
-- 属性は `System.ComponentModel.DataAnnotations` を使う（`[Display(Name, Description, Order)]`、`[Range]` など）。フォルダやファイルの選択のように、標準の属性で表せないものは独自の属性を用意する。
-- 対応する型：`bool`、数値、`string`、列挙型（選択肢として表示）、パス、それらのリスト
-- プラグインは `ConfigureServices` で、設定画面に出す Options クラスを登録する。対応していない型のプロパティがある場合、ホストは読み込み時に警告を出す。
-
-```csharp
-public sealed class FileSearchOptions
-{
-    [Display(Name = "対象のフォルダ"), FolderPath]
-    public List<string> Folders { get; set; } = [];
-
-    [Display(Name = "全体検索に含める", Description = "オフにすると f キーワードを付けたときだけ検索する")]
-    public bool IncludeInGlobal { get; set; }
-}
-```
+- 表示名、説明、並び順、値の範囲などは属性で指定する。フォルダやファイルの選択のように、標準の属性で表せないものは独自の属性を用意する。
+- 対応する型：真偽値、数値、文字列、列挙型（選択肢として表示）、パス、それらのリスト
+- プラグインは、設定画面に出す Options クラスをホストに登録する。対応していない型のプロパティがある場合、ホストは読み込み時に警告を出す。
 
 ## 11. 配布とインストール
 
