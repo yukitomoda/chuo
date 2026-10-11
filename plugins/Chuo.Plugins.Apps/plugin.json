@@ -1,0 +1,7 @@
+{
+  "id": "chuo.apps",
+  "name": "アプリ",
+  "version": "1.0.0",
+  "entry": "Chuo.Plugins.Apps.dll",
+  "hostApi": "1.x"
+}

@@ -64,7 +64,7 @@ public sealed class ClipboardPlugin : IChuoPlugin
 |---|---|
 | `ResultItem` | `Id`、`Title`、`Subtitle`、`Icon`、`Actions`、`Preview` |
 | `CatalogItem` | `ResultItem` に検索用の `Keywords` を加えたもの |
-| `IconSource` | ファイルのアイコン、画像ファイル、画像のバイト列 |
+| `IconSource` | ファイルのアイコン（今は Windows のみ）、画像ファイル、画像のバイト列 |
 | `ItemAction` | タイトルと実行する処理。`Open`、`ShowInFolder`、`CopyText` のヘルパーがある |
 | `ActionResult` | 実行後の動作：閉じる（`Close`）、開いたままにする（`KeepOpen`）、入力を置き換える（`SetQuery`） |
 | `Preview` | テキスト、画像、ファイル、プロパティの一覧 |

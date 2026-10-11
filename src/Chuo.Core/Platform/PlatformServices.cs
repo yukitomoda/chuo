@@ -49,3 +49,22 @@ public sealed class UnsupportedGlobalHotkeyService : IGlobalHotkeyService
     public Task<IDisposable> RegisterAsync(string gesture, Action pressed) =>
         Task.FromException<IDisposable>(new PlatformNotSupportedException("この環境はグローバルホットキーに対応していません。"));
 }
+
+/// <summary>ファイル（実行ファイル、ショートカットなど）に関連付けられたアイコンを OS から取得する。</summary>
+public interface IFileIconProvider
+{
+    /// <summary>
+    /// アイコンを <paramref name="size"/> ピクセル四方以内で取得する。どのスレッドから呼んでもよい。取得できなければ null を返す。
+    /// </summary>
+    Task<IconPixels?> GetIconAsync(string path, int size, CancellationToken cancellationToken = default);
+}
+
+/// <summary>アイコンの画素。上の行から順に並んだ、アルファ乗算済みの BGRA（1行は <c>Width * 4</c> バイト）。</summary>
+public sealed record IconPixels(int Width, int Height, byte[] Bgra);
+
+/// <summary>ファイルのアイコンを取得できない環境で使う実装。</summary>
+public sealed class NullFileIconProvider : IFileIconProvider
+{
+    public Task<IconPixels?> GetIconAsync(string path, int size, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IconPixels?>(null);
+}

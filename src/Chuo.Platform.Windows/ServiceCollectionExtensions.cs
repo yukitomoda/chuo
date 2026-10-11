@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGlobalHotkeyService, GlobalHotkeyService>();
         services.AddSingleton<ILauncherWindowIntegration, LauncherWindowIntegration>();
         services.AddSingleton<IShell, WindowsShell>();
+        services.AddSingleton<IFileIconProvider, FileIconProvider>();
         return services;
     }
 }

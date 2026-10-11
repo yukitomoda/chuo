@@ -292,14 +292,32 @@ public sealed class LauncherWindow : Window
             DockPanel.SetDock(icon, Dock.Left);
 
             // 行は使い回されるので、DataContext が変わるたびに中身を差し替える
-            row.DataContextChanged += (_, _) =>
+            row.DataContextChanged += async (_, _) =>
             {
-                if (row.DataContext is SearchResult { Item: var item })
+                if (row.DataContext is not SearchResult { Item: var item })
                 {
-                    icon.Source = _icons.Get(item.Icon);
-                    title.Text = item.Title;
-                    subtitle.Text = item.Subtitle;
-                    subtitle.IsVisible = !string.IsNullOrEmpty(item.Subtitle);
+                    return;
+                }
+                title.Text = item.Title;
+                subtitle.Text = item.Subtitle;
+                subtitle.IsVisible = !string.IsNullOrEmpty(item.Subtitle);
+
+                if (item.Icon is null)
+                {
+                    icon.Source = null;
+                    return;
+                }
+                if (_icons.TryGet(item.Icon, out var cached))
+                {
+                    icon.Source = cached;
+                    return;
+                }
+                icon.Source = null;
+                var loaded = await _icons.LoadAsync(item.Icon);
+                // 読み込んでいる間に、行が別の項目に使い回されていたら何もしない
+                if (row.DataContext is SearchResult { Item: var current } && ReferenceEquals(current, item))
+                {
+                    icon.Source = loaded;
                 }
             };
             return row;

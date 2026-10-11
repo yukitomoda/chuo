@@ -16,6 +16,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGlobalHotkeyService, UnsupportedGlobalHotkeyService>();
         services.AddSingleton<ILauncherWindowIntegration, NullLauncherWindowIntegration>();
         services.AddSingleton<IShell, LinuxShell>();
+        services.AddSingleton<IFileIconProvider, NullFileIconProvider>();
         return services;
     }
 }

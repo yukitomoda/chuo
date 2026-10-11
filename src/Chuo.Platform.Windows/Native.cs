@@ -109,4 +109,74 @@ internal static unsafe partial class Native
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetProcessWorkingSetSize(nint process, nint minimumWorkingSetSize, nint maximumWorkingSetSize);
+
+    public const int SIIGBF_ICONONLY = 0x4;
+    public const uint DIB_RGB_COLORS = 0;
+
+    /// <summary>IShellItemImageFactory の IID。</summary>
+    public static readonly Guid IID_IShellItemImageFactory = new("bcc18b79-ba16-442f-80c4-8a59c30c463b");
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SIZE
+    {
+        public int cx;
+        public int cy;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BITMAP
+    {
+        public int bmType;
+        public int bmWidth;
+        public int bmHeight;
+        public int bmWidthBytes;
+        public ushort bmPlanes;
+        public ushort bmBitsPixel;
+        public nint bmBits;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BITMAPINFOHEADER
+    {
+        public uint biSize;
+        public int biWidth;
+        public int biHeight;
+        public ushort biPlanes;
+        public ushort biBitCount;
+        public uint biCompression;
+        public uint biSizeImage;
+        public int biXPelsPerMeter;
+        public int biYPelsPerMeter;
+        public uint biClrUsed;
+        public uint biClrImportant;
+    }
+
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int SHCreateItemFromParsingName(string pszPath, nint pbc, in Guid riid, out nint ppv);
+
+    /// <summary>IShellItemImageFactory::GetImage（vtable の 4 番目）を呼ぶ。</summary>
+    public static int ShellItemImageFactoryGetImage(nint factory, SIZE size, int flags, out nint bitmap)
+    {
+        var getImage = (delegate* unmanaged[Stdcall]<nint, SIZE, int, nint*, int>)(*(nint**)factory)[3];
+        nint result;
+        var hr = getImage(factory, size, flags, &result);
+        bitmap = result;
+        return hr;
+    }
+
+    [LibraryImport("gdi32.dll", EntryPoint = "GetObjectW")]
+    public static partial int GetObject(nint h, int c, out BITMAP pv);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial int GetDIBits(nint hdc, nint hbm, uint start, uint cLines, void* lpvBits, ref BITMAPINFOHEADER lpbmi, uint usage);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DeleteObject(nint ho);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetDC(nint hWnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial int ReleaseDC(nint hWnd, nint hDC);
 }

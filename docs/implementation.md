@@ -8,12 +8,13 @@
 |---|---|
 | `src/Chuo.Abstractions` | プラグイン API（`IChuoPlugin`、`ICatalogProvider`、`ILiveQueryProvider`、項目、アクション、プレビュー、本体のサービス） |
 | `src/Chuo.Core` | 文字列の正規化、あいまい検索、カタログの索引、検索、プラグインの読み込み、プラットフォームの抽象 |
-| `src/Chuo.Platform.Windows` | ホットキー、前面化、IME のオフと監視、メモリのトリム、シェル |
+| `src/Chuo.Platform.Windows` | ホットキー、前面化、IME のオフと監視、メモリのトリム、シェル、ファイルのアイコン |
 | `src/Chuo.Platform.Linux` | シェルのみ。ホットキーなどは未実装 |
 | `src/Chuo.App` | Avalonia の UI と汎用ホスト。実行ファイル名は `chuo` |
+| `plugins/Chuo.Plugins.Apps` | アプリ起動（カタログ、全体検索）。Windows はスタートメニュー、Linux は .desktop |
 | `plugins/Chuo.Plugins.Calculator` | 電卓（ライブクエリ、グローバルトリガー） |
 | `plugins/Chuo.Plugins.WebSearch` | Web 検索（ライブクエリ、キーワード `g`） |
-| `tests/Chuo.Core.Tests` | 正規化、あいまい検索、検索、プラグインの読み込みとアンロード、電卓の式 |
+| `tests/Chuo.Core.Tests` | 正規化、あいまい検索、検索、プラグインの読み込みとアンロード、電卓の式、.lnk と .desktop の読み取り |
 
 ## 第1段階（2026-10-11）：骨組みと検索の流れ
 
@@ -27,13 +28,18 @@
 - [x] `settings.json` の読み込み（ホットキー、最大表示件数、IME、描画）と、プラグインへの設定の受け渡し
 - [x] ログ（日ごとのファイル）
 
+## 第2段階（2026-10-12）：アプリ起動
+
+- [x] アプリ起動のプラグイン（7 章の 1）。Windows はスタートメニューの `.lnk` と `.url`、Linux は `.desktop`。追加や削除を監視して反映する
+- [x] ファイルのアイコンの取得（Windows）と、アイコンの非同期の読み込み
+
 ## 残りの作業
 
 順番は未定。
 
 - プラグインの承認（ハッシュの検証、承認リスト）、ユーザーが追加したプラグインと開発中のプラグイン、ホットリロード（2.2、2.3）
 - 単一インスタンスと IPC、`chuo` コマンド（4 章）
-- アプリ起動のプラグインとアイコンの取得（7 章の 1）
+- アプリ起動の残り：Microsoft Store のアプリ（`.lnk` を持たない）、Linux のアイコンテーマと SVG のアイコン
 - ファイル検索（7.1）、クリップボード履歴（7.2）
 - 使用履歴による順位付け、エイリアス、お気に入り、無視（3.2、6 章）
 - ローマ字での検索（読みの付与、3.3）

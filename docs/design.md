@@ -123,6 +123,15 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 ### 4.5 アプリの列挙
 
 - Windows はスタートメニューの `.lnk`、Linux は `.desktop` からアプリを列挙し、アイコンも取得する。
+- アプリを置いているフォルダの変更を `FileSystemWatcher` で監視し、変更が落ち着いてから（2秒後に）一覧を作り直す。
+- Windows
+  - 対象はユーザーと全ユーザーのスタートメニューの `.lnk` と `.url`。
+  - `.lnk` は COM を使わずにファイルの形式（MS-SHLLINK）を直接読み、リンク先のパスを得る。リンク先は、サブタイトルと「ファイルの場所を開く」、実行ファイルの名前での検索に使う。
+  - アイコンはホストが `IShellItemImageFactory` で取得する。シェルの COM オブジェクトを安全に使うため、STA の専用スレッドで処理する。
+- Linux
+  - XDG のデータフォルダの `applications/` を優先度の順に読み、同じデスクトップファイル ID は優先度の高いものだけを使う。`NoDisplay`、`Hidden`、`OnlyShowIn` / `NotShowIn`、`TryExec` に従って除外する。
+  - 起動は `gio launch` に任せる（端末で開くアプリや起動の通知も正しく扱える）。`gio` がなければ `Exec` を直接実行する。
+  - アイコンは hicolor と Adwaita のテーマ、`/usr/share/pixmaps` から PNG を探す。使用中のアイコンテーマには従わず、SVG にしかないアイコンは表示できない。
 
 ## 5. `chuo` コマンドと IPC
 
