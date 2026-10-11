@@ -17,7 +17,7 @@ using Microsoft.Extensions.Options;
 namespace Chuo.App;
 
 /// <summary>
-/// ランチャーのウィンドウ。起動時に一度だけ生成し、以後は表示と非表示を切り替えるだけにする（要件定義書 5 章）。
+/// ランチャーのウィンドウ。起動時に一度だけ生成し、以後は表示と非表示を切り替えるだけにする（設計 4.1）。
 /// </summary>
 public sealed class LauncherWindow : Window
 {
@@ -225,7 +225,7 @@ public sealed class LauncherWindow : Window
                 MoveSelection(-1);
                 break;
             case Key.Enter:
-                // 2つめ以降のアクションは修飾キーに割り当てる（要件定義書 6.2）
+                // 2つめ以降のアクションは修飾キーに割り当てる（要件定義書 5.2）
                 ExecuteSelected(e.KeyModifiers.HasFlag(KeyModifiers.Control) ? 1 : 0);
                 break;
             case Key.Q when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):

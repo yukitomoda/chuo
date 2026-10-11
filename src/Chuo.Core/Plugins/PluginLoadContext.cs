@@ -5,7 +5,7 @@ namespace Chuo.Core.Plugins;
 
 /// <summary>
 /// プラグインごとの collectible な ALC。ホストと共有するのは Chuo.Abstractions と Microsoft.Extensions.* に限り、
-/// それ以外の依存はプラグインのフォルダから、この ALC の中でだけ解決する（要件定義書 3.1）。
+/// それ以外の依存はプラグインのフォルダから、この ALC の中でだけ解決する（設計 2 章）。
 /// </summary>
 internal sealed class PluginLoadContext(string pluginId, string entryPath)
     : AssemblyLoadContext($"plugin:{pluginId}", isCollectible: true)

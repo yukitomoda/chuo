@@ -1,6 +1,6 @@
 namespace Chuo.Core;
 
-/// <summary>設定とデータの保存場所（要件定義書 10 章）。</summary>
+/// <summary>設定とデータの保存場所（設計 9 章）。</summary>
 public static class ChuoPaths
 {
     /// <summary>設定のフォルダ。Windows は <c>%APPDATA%\chuo</c>、Linux は <c>~/.config/chuo</c>。</summary>

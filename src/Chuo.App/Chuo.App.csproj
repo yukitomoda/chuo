@@ -5,7 +5,7 @@
     <AssemblyName>chuo</AssemblyName>
     <RootNamespace>Chuo.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <!-- プラグインを動的に読み込むため、NativeAOT ではなく ReadyToRun を使う（要件定義書 2 章） -->
+    <!-- プラグインを動的に読み込むため、NativeAOT ではなく ReadyToRun を使う（設計 1 章） -->
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 

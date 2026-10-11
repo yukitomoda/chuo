@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace Chuo.App;
 
 /// <summary>
-/// ログをファイルに書く。日ごとにファイルを切り替え、行にカテゴリ（プラグインの型の名前空間を含む）を出す（要件定義書 10 章）。
+/// ログをファイルに書く。日ごとにファイルを切り替え、行にカテゴリ（プラグインの型の名前空間を含む）を出す（要件定義書 9 章、設計 9 章）。
 /// </summary>
 public sealed class FileLoggerProvider(string directory) : ILoggerProvider
 {

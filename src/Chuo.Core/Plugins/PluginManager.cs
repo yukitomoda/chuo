@@ -12,7 +12,7 @@ public sealed class PluginManagerOptions
 {
     /// <summary>
     /// 同梱プラグインのフォルダ。この下のフォルダを1つずつプラグインとして読み込む。
-    /// TODO: ハッシュの検証（要件定義書 3.2）を実装したら、ユーザーが追加したプラグインと開発中のプラグインにも対応する。
+    /// TODO: ハッシュの検証（設計 2.2）を実装したら、ユーザーが追加したプラグインと開発中のプラグインにも対応する。
     /// </summary>
     public List<string> BundledDirectories { get; } = [];
 }

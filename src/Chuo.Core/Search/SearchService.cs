@@ -13,7 +13,7 @@ public sealed record SearchResult(ResultItem Item, string PluginId, int Score)
     public string GlobalId => $"{PluginId}:{Item.Id}";
 }
 
-/// <summary>入力に応じて、カタログ型とライブクエリ型のプロバイダから結果を集めて順位を付ける（要件定義書 4 章）。</summary>
+/// <summary>入力に応じて、カタログ型とライブクエリ型のプロバイダから結果を集めて順位を付ける（設計 3 章）。</summary>
 public sealed class SearchService(ProviderRegistry registry, IOptionsMonitor<ChuoSettings> settings, ILogger<SearchService> logger)
 {
     /// <summary>

@@ -4,7 +4,7 @@ using Chuo.Abstractions;
 
 namespace Chuo.Core.Plugins;
 
-/// <summary>プラグインのフォルダにある <c>plugin.json</c>（要件定義書 3.3）。</summary>
+/// <summary>プラグインのフォルダにある <c>plugin.json</c>（設計 2.1）。</summary>
 public sealed record PluginManifest(string Id, string Name, string Version, string Entry, string HostApi)
 {
     public const string FileName = "plugin.json";

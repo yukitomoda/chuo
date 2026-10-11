@@ -3,7 +3,7 @@ using System.Text;
 namespace Chuo.Core.Text;
 
 /// <summary>
-/// 検索のために文字列を正規化する。ひらがなとカタカナ、全角と半角、大文字と小文字を同一視する（要件定義書 4.4）。
+/// 検索のために文字列を正規化する。ひらがなとカタカナ、全角と半角、大文字と小文字を同一視する（要件定義書 3.3）。
 /// </summary>
 public static class TextNormalizer
 {

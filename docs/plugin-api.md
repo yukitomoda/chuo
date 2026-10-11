@@ -1,10 +1,10 @@
 # プラグイン API の設計
 
-要件定義書（`docs/requirements.md` の 3 章と 10.2）を、コード上の形に落としたもの。型の名前や書き方はこのファイルに書き、要件定義書には書かない。実装は `src/Chuo.Abstractions` にあり、食い違ったときは実装が正とする。
+要件定義書（`docs/requirements.md`）の 2 章と 9.2、設計（`docs/design.md`）の 2 章と 3 章を、コード上の形に落としたもの。型の名前や書き方はこのファイルに書き、要件定義書には書かない。実装は `src/Chuo.Abstractions` にあり、食い違ったときは実装が正とする。
 
 ## plugin.json
 
-パッケージの身元情報を書く（要件定義書 3.3）。
+パッケージの身元情報を書く（設計 2.1）。
 
 ```json
 {
@@ -20,7 +20,7 @@
 
 ## プロバイダの宣言
 
-プロバイダはクラスに属性を付けて宣言する。属性の値は既定値で、ユーザーが設定画面で上書きできる（要件定義書 3.3）。
+プロバイダはクラスに属性を付けて宣言する。属性の値は既定値で、ユーザーが設定画面で上書きできる（要件定義書 2.1）。
 
 ```csharp
 [CatalogProvider(Keyword = "f", IncludeInGlobal = false)]
@@ -30,7 +30,7 @@ public sealed class FileCatalog : ICatalogProvider { ... }
 public sealed class Calculator : ILiveQueryProvider { ... }
 ```
 
-| 種類（要件定義書 4 章） | インターフェイス | 属性 |
+| 種類（設計 3 章） | インターフェイス | 属性 |
 |---|---|---|
 | カタログ型 | `ICatalogProvider`（`InitializeAsync(ICatalog, CancellationToken)`） | `[CatalogProvider]`（`Keyword`、`IncludeInGlobal`） |
 | ライブクエリ型 | `ILiveQueryProvider`（`QueryAsync(Query, CancellationToken)`） | `[LiveQueryProvider]`（`Keyword`、`GlobalTrigger`、`TimeoutMs`） |
@@ -39,7 +39,7 @@ public sealed class Calculator : ILiveQueryProvider { ... }
 
 ## プラグインのエントリと構成
 
-プラグインは `IChuoPlugin` を実装したクラスを1つ持ち、ミニ汎用ホストにサービスを登録する（要件定義書 3.4）。
+プラグインは `IChuoPlugin` を実装したクラスを1つ持ち、ミニ汎用ホストにサービスを登録する（設計 2 章）。
 
 ```csharp
 public sealed class ClipboardPlugin : IChuoPlugin
@@ -71,7 +71,7 @@ public sealed class ClipboardPlugin : IChuoPlugin
 
 ## プラグインの設定画面
 
-Options クラスのプロパティと属性から、ホストが画面を生成する（要件定義書 10.2）。属性は `System.ComponentModel.DataAnnotations` を使い、標準で表せないものは独自の属性を用意する。
+Options クラスのプロパティと属性から、ホストが画面を生成する（要件定義書 9.2、設計 8 章）。属性は `System.ComponentModel.DataAnnotations` を使い、標準で表せないものは独自の属性を用意する。
 
 ```csharp
 public sealed class FileSearchOptions

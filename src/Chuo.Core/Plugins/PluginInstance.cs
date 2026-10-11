@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Chuo.Core.Plugins;
 
-/// <summary>読み込んだプラグイン1つ分。専用の ALC と、その中のミニ汎用ホストを持つ（要件定義書 3.4）。</summary>
+/// <summary>読み込んだプラグイン1つ分。専用の ALC と、その中のミニ汎用ホストを持つ（設計 2 章）。</summary>
 internal sealed class PluginInstance
 {
     /// <summary>本体からプラグインのホストに中継するサービス。</summary>
@@ -111,7 +111,7 @@ internal sealed class PluginInstance
         }
     }
 
-    /// <summary>ホストを止めて、ALC をアンロードする（要件定義書 3.4 の順）。</summary>
+    /// <summary>ホストを止めて、ALC をアンロードする（設計 2 章の順）。</summary>
     public async Task UnloadAsync(CancellationToken cancellationToken)
     {
         try
