@@ -22,8 +22,19 @@ internal static class Program
 
         Options = SpikeOptions.Parse(args);
 
+        var win32Options = new Win32PlatformOptions { ShouldRenderOnUIThread = Options.RenderOnUiThread };
+        if (Options.RenderingMode is { } renderingMode)
+        {
+            win32Options.RenderingMode = [renderingMode];
+        }
+        if (Options.CompositionMode is { } compositionMode)
+        {
+            win32Options.CompositionMode = [compositionMode];
+        }
+
         return AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            .With(win32Options)
             .StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
     }
 }

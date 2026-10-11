@@ -1,0 +1,6 @@
+{
+  "uuid": "chuo-spike@chuo.local",
+  "name": "chuo spike",
+  "description": "chuo の技術検証用。クリップボードの変化を D-Bus で中継する",
+  "shell-version": ["48", "49", "50"]
+}

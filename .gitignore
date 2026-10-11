@@ -1,6 +1,7 @@
 # .NET のビルド成果物
 bin/
 obj/
+publish/
 *.user
 .vs/
 

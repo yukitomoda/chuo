@@ -27,7 +27,9 @@ public sealed class App : Application
 
         var options = Program.Options;
         var log = new SpikeLog();
-        log.Write($"--- start: hotkey={options.Hotkey} imeOff={options.ImeOff} imeRestore={options.ImeRestore} " +
+        log.Write($"--- start: hotkey={options.Hotkey} imeOff={options.ImeOff} imeRestore={options.ImeRestore} imeMethod={options.ImeMethod} " +
+                  $"render={options.RenderingMode?.ToString() ?? "default"} composition={options.CompositionMode?.ToString() ?? "default"} " +
+                  $"renderOnUiThread={options.RenderOnUiThread} trimOnHide={options.TrimOnHide} " +
                   $"runtime={Environment.Version} os={Environment.OSVersion}");
 
         var window = new LauncherWindow(log, options);
