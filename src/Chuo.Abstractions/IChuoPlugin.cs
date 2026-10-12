@@ -25,6 +25,9 @@ public interface IPluginContext
     /// <summary>プラグインが自由に読み書きできるデータのフォルダ。初めて使うときに作られる。</summary>
     string DataDirectory { get; }
 
-    /// <summary><c>settings.json</c> の <c>plugins.&lt;id&gt;</c> のセクション。</summary>
+    /// <summary>
+    /// <c>settings.json</c> の、このプラグインの設定のセクション（<c>plugins.&lt;id&gt;.settings</c>）。
+    /// 設定画面に出すには <see cref="PluginSettingsServiceCollectionExtensions.AddPluginSettings"/> で登録する。
+    /// </summary>
     IConfiguration Configuration { get; }
 }

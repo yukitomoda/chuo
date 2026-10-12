@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="..\Shared\ShellLink.cs" Link="Shared\ShellLink.cs" />
+    <Compile Include="..\Shared\DesktopEntry.cs" Link="Shared\DesktopEntry.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Chuo.Core.Tests" />
   </ItemGroup>
 

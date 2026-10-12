@@ -17,7 +17,7 @@ public sealed class WebSearchOptions
 public sealed class WebSearchPlugin : IChuoPlugin
 {
     public void ConfigureServices(IServiceCollection services, IPluginContext context) =>
-        services.Configure<WebSearchOptions>(context.Configuration);
+        services.AddPluginSettings<WebSearchOptions>(context);
 }
 
 /// <summary>キーワードの後の文字列で Web 検索する（例: <c>g rust</c>）。</summary>

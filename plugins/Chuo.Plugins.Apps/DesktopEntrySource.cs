@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Chuo.Abstractions;
+using Chuo.Plugins.Shared;
 
 namespace Chuo.Plugins.Apps;
 

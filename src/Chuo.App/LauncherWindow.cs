@@ -28,6 +28,7 @@ public sealed class LauncherWindow : Window
     private readonly IClipboard _clipboard;
     private readonly ILauncherWindowIntegration _integration;
     private readonly IconCache _icons;
+    private readonly SettingsLauncher _settingsLauncher;
     private readonly IOptionsMonitor<ChuoSettings> _settings;
     private readonly ILogger<LauncherWindow> _logger;
     private readonly TextBox _input;
@@ -38,13 +39,14 @@ public sealed class LauncherWindow : Window
 
     public LauncherWindow(
         SearchService search, IShell shell, IClipboard clipboard, ILauncherWindowIntegration integration, IconCache icons,
-        IOptionsMonitor<ChuoSettings> settings, ILogger<LauncherWindow> logger)
+        SettingsLauncher settingsLauncher, IOptionsMonitor<ChuoSettings> settings, ILogger<LauncherWindow> logger)
     {
         _search = search;
         _shell = shell;
         _clipboard = clipboard;
         _integration = integration;
         _icons = icons;
+        _settingsLauncher = settingsLauncher;
         _settings = settings;
         _logger = logger;
 
@@ -227,6 +229,11 @@ public sealed class LauncherWindow : Window
             case Key.Enter:
                 // 2つめ以降のアクションは修飾キーに割り当てる（要件定義書 5.2）
                 ExecuteSelected(e.KeyModifiers.HasFlag(KeyModifiers.Control) ? 1 : 0);
+                break;
+            case Key.OemComma when e.KeyModifiers == KeyModifiers.Control:
+                // 設定画面を開く（要件定義書 9.1）
+                HideLauncher();
+                _settingsLauncher.Open();
                 break;
             case Key.Q when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
                 // TODO: 終了の操作は、設定画面やシステムのコマンドを作るまでの仮のもの

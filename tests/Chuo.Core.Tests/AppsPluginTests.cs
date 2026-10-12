@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using Chuo.Plugins.Apps;
+using Chuo.Plugins.Shared;
 
 namespace Chuo.Core.Tests;
 

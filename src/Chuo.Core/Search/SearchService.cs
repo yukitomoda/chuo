@@ -38,15 +38,15 @@ public sealed class SearchService(ProviderRegistry registry, IOptionsMonitor<Chu
         string catalogPattern;
         if (keyword is not null)
         {
-            catalogs = registry.Catalogs.Where(r => r.Keyword == keyword);
-            liveQueries = registry.LiveQueries.Where(r => r.Keyword == keyword).Select(r => (r, new Query(text, body, keyword))).ToList();
+            catalogs = registry.Catalogs.Where(r => registry.KeywordOf(r) == keyword);
+            liveQueries = registry.LiveQueries.Where(r => registry.KeywordOf(r) == keyword).Select(r => (r, new Query(text, body, keyword))).ToList();
             catalogPattern = body;
         }
         else
         {
-            catalogs = registry.Catalogs.Where(r => r.IncludeInGlobal);
+            catalogs = registry.Catalogs.Where(registry.IncludesInGlobal);
             liveQueries = registry.LiveQueries
-                .Where(r => r.GlobalTrigger?.IsMatch(text) == true)
+                .Where(r => registry.IncludesInGlobal(r) && r.GlobalTrigger?.IsMatch(text) == true)
                 .Select(r => (r, new Query(text, text, null)))
                 .ToList();
             catalogPattern = text;
@@ -70,7 +70,8 @@ public sealed class SearchService(ProviderRegistry registry, IOptionsMonitor<Chu
         }
 
         var candidate = text[..space];
-        var known = registry.Catalogs.Any(r => r.Keyword == candidate) || registry.LiveQueries.Any(r => r.Keyword == candidate);
+        var known = registry.Catalogs.Any(r => registry.KeywordOf(r) == candidate)
+            || registry.LiveQueries.Any(r => registry.KeywordOf(r) == candidate);
         return known ? (candidate, text[(space + 1)..]) : (null, text);
     }
 

@@ -29,10 +29,15 @@ internal sealed class PluginInstance
 
     public IReadOnlyList<LiveQueryRegistration> LiveQueries { get; private set; }
 
+    /// <summary>設定画面に出す設定のクラス。</summary>
+    public IReadOnlyList<Type> SettingsTypes { get; private set; }
+
     private PluginInstance(
         PluginManifest manifest, string directory, PluginLoadContext loadContext, IHost host,
-        IReadOnlyList<(CatalogRegistration, ICatalogProvider)> catalogs, IReadOnlyList<LiveQueryRegistration> liveQueries)
+        IReadOnlyList<(CatalogRegistration, ICatalogProvider)> catalogs, IReadOnlyList<LiveQueryRegistration> liveQueries,
+        IReadOnlyList<Type> settingsTypes)
     {
+        SettingsTypes = settingsTypes;
         Manifest = manifest;
         Directory = directory;
         _loadContext = loadContext;
@@ -67,7 +72,7 @@ internal sealed class PluginInstance
             }
             builder.Services.Replace(ServiceDescriptor.Singleton<IHostLifetime, NullHostLifetime>());
 
-            var context = new PluginContext(manifest.Id, directory, hostConfiguration.GetSection($"plugins:{manifest.Id}"));
+            var context = new PluginContext(manifest.Id, directory, hostConfiguration.GetSection(PluginManager.SettingsSection(manifest.Id)));
             builder.Services.AddSingleton<IPluginContext>(context);
 
             if (types.FirstOrDefault(t => typeof(IChuoPlugin).IsAssignableFrom(t) && t is { IsAbstract: false, IsInterface: false }) is { } pluginType)
@@ -102,7 +107,9 @@ internal sealed class PluginInstance
                     TimeSpan.FromMilliseconds(p.Attribute.TimeoutMs)))
                 .ToList();
 
-            return new PluginInstance(manifest, directory, loadContext, host, catalogs, liveQueries);
+            var settingsTypes = host.Services.GetServices<PluginSettingsDescriptor>().Select(d => d.OptionsType).ToList();
+
+            return new PluginInstance(manifest, directory, loadContext, host, catalogs, liveQueries, settingsTypes);
         }
         catch
         {
@@ -124,6 +131,7 @@ internal sealed class PluginInstance
             // ALC をアンロードできるよう、プラグインの型への参照を残さない
             Catalogs = [];
             LiveQueries = [];
+            SettingsTypes = [];
             _loadContext.Unload();
         }
     }

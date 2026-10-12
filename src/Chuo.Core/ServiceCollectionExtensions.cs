@@ -1,5 +1,6 @@
 using Chuo.Core.Plugins;
 using Chuo.Core.Search;
+using Chuo.Core.Settings;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Chuo.Core;
@@ -11,7 +12,9 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<ProviderRegistry>();
         services.AddSingleton<SearchService>();
-        services.AddHostedService<PluginManager>();
+        services.AddSingleton<PluginManager>();
+        services.AddHostedService(sp => sp.GetRequiredService<PluginManager>());
+        services.AddSingleton(new SettingsStore(ChuoPaths.SettingsFile));
         services.Configure<PluginManagerOptions>(o => o.BundledDirectories.Add(ChuoPaths.BundledPluginDirectory));
         return services;
     }

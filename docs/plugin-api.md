@@ -53,7 +53,7 @@ public sealed class ClipboardPlugin : IChuoPlugin
 }
 ```
 
-- `IPluginContext` は、プラグインの ID、フォルダ、データフォルダ、設定（`settings.json` の `plugins:<id>` のセクション）を持つ。
+- `IPluginContext` は、プラグインの ID、フォルダ、データフォルダ、設定（`settings.json` の `plugins:<id>:settings` のセクション）を持つ。
 - プロバイダはホストが属性をスキャンし、プラグインの子コンテナから生成する。コンストラクタで依存を受け取れる。
 - 常駐処理は `IHostedService` / `BackgroundService` で書く。
 - 本体から中継するサービス：`IShell`、`IClipboard`、`ILauncher`、`ILoggerFactory`（`ILogger<T>`）。`IPluginStorage` は未実装。
@@ -71,17 +71,34 @@ public sealed class ClipboardPlugin : IChuoPlugin
 
 ## プラグインの設定画面
 
-Options クラスのプロパティと属性から、ホストが画面を生成する（要件定義書 9.2、設計 8 章）。属性は `System.ComponentModel.DataAnnotations` を使い、標準で表せないものは独自の属性を用意する。
+Options クラスを `AddPluginSettings<T>` で登録すると、ホストがプロパティと属性から画面を生成する（要件定義書 9.2、設計 8 章）。設定の値は `IOptionsMonitor<T>` で受け取り、変更はその場で反映される。
 
 ```csharp
-public sealed class FileSearchOptions
+public sealed class ShortcutsOptions
 {
-    [Display(Name = "対象のフォルダ"), FolderPath]
+    [Display(Name = "対象のフォルダ", Description = "この中のショートカットと実行ファイルを検索する", Order = 0), FolderPath]
     public List<string> Folders { get; set; } = [];
 
-    [Display(Name = "全体検索に含める", Description = "オフにすると f キーワードを付けたときだけ検索する")]
-    public bool IncludeInGlobal { get; set; }
+    [Display(Name = "サブフォルダも対象にする", Order = 1)]
+    public bool IncludeSubfolders { get; set; } = true;
+}
+
+public sealed class ShortcutsPlugin : IChuoPlugin
+{
+    public void ConfigureServices(IServiceCollection services, IPluginContext context) =>
+        services.AddPluginSettings<ShortcutsOptions>(context);
 }
 ```
 
-- 設定画面と `FolderPath` などの独自の属性は未実装。
+| プロパティの型 | 入力欄 |
+|---|---|
+| `bool` | チェックボックス |
+| `int`、`long` / `double`、`float`、`decimal` | 数値（`[Range]` で範囲を指定できる） |
+| `string` | テキスト。`[FolderPath]` / `[FilePath]` を付けると「参照…」が付く |
+| 列挙型 | 選択肢 |
+| `List<string>` | 一覧と追加・削除。`[FolderPath]` / `[FilePath]` を付けると「参照…」が付く |
+
+- 表示名、説明、並び順は `[Display(Name, Description, Order)]` で指定する。
+- これ以外の型のプロパティは画面に出さず、読み込み時にログに警告を出す。
+- **リストの既定値は空にする。** 構成のバインドは既存のリストに値を追加するので、既定値を入れると設定の値がその後ろに足されてしまう。
+- キーワードと全体検索に含めるかの上書きは、ホストがすべてのプロバイダについて画面に出す。プラグインの設定に含める必要はない。

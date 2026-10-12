@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Chuo.Plugins.Apps;
+namespace Chuo.Plugins.Shared;
 
 /// <summary>
 /// .desktop ファイルの <c>[Desktop Entry]</c> グループ（Desktop Entry Specification）。

@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 
-namespace Chuo.Plugins.Apps;
+namespace Chuo.Plugins.Shared;
 
 /// <summary>ショートカット（.lnk）から読み取った情報。</summary>
 /// <param name="TargetPath">リンク先のパス。MSI でインストールしたアプリのショートカットなど、パスを持たないものは null。</param>

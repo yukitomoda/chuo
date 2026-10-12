@@ -1,5 +1,7 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Chuo.Core.Search;
+using Chuo.Core.Settings;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,6 +19,17 @@ public sealed class PluginManagerOptions
     public List<string> BundledDirectories { get; } = [];
 }
 
+/// <summary>読み込んだプラグインの情報。設定画面で使う。</summary>
+/// <param name="SettingsTypes">設定画面に出す設定のクラス。プラグインの ALC の型なので、使い終わったら参照を残さないこと。</param>
+public sealed record PluginInfo(string Id, string Name, string Version, IReadOnlyList<ProviderInfo> Providers, IReadOnlyList<Type> SettingsTypes);
+
+/// <summary>プロバイダの情報。</summary>
+/// <param name="Name">プロバイダの名前（クラス名）。設定のキーに使う。</param>
+/// <param name="DefaultKeyword">プロバイダが宣言したキーワード。</param>
+/// <param name="DefaultIncludeInGlobal">プロバイダが宣言した、全体検索に含めるか。</param>
+/// <param name="CanIncludeInGlobal">全体検索に参加できるか。ライブクエリ型はグローバルトリガーを宣言したものだけが参加できる。</param>
+public sealed record ProviderInfo(string Name, bool IsLiveQuery, string? DefaultKeyword, bool DefaultIncludeInGlobal, bool CanIncludeInGlobal);
+
 /// <summary>プラグインの読み込み、開始、アンロードを行う。本体の汎用ホストのホステッドサービスとして動く。</summary>
 public sealed class PluginManager(
     ProviderRegistry registry,
@@ -27,6 +40,13 @@ public sealed class PluginManager(
 {
     private readonly List<PluginInstance> _plugins = [];
     private readonly CancellationTokenSource _stopping = new();
+    private ImmutableArray<PluginInfo> _pluginInfos = [];
+
+    /// <summary>プラグインの設定のセクションのキー（<c>plugins:&lt;id&gt;:settings</c>）。</summary>
+    public static string SettingsSection(string pluginId) => $"plugins:{pluginId}:settings";
+
+    /// <summary>読み込んだプラグインの一覧。どのスレッドから読んでもよい。</summary>
+    public IReadOnlyList<PluginInfo> Plugins => _pluginInfos;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -61,6 +81,8 @@ public sealed class PluginManager(
 
             var plugin = await PluginInstance.LoadAsync(manifest, directory, services, configuration, cancellationToken);
             _plugins.Add(plugin);
+            _pluginInfos = _pluginInfos.Add(CreateInfo(plugin));
+            WarnUnsupportedSettings(plugin);
             foreach (var registration in plugin.LiveQueries)
             {
                 registry.Add(registration);
@@ -78,6 +100,37 @@ public sealed class PluginManager(
         catch (Exception ex)
         {
             logger.LogError(ex, "{Directory} のプラグインを読み込めなかった", directory);
+        }
+    }
+
+    private static PluginInfo CreateInfo(PluginInstance plugin) =>
+        new(plugin.Manifest.Id, plugin.Manifest.Name, plugin.Manifest.Version,
+            [
+                .. plugin.Catalogs.Select(c => new ProviderInfo(
+                    c.Registration.ProviderName, false, c.Registration.Keyword, c.Registration.IncludeInGlobal, CanIncludeInGlobal: true)),
+                .. plugin.LiveQueries.Select(q => new ProviderInfo(
+                    q.ProviderName, true, q.Keyword, q.IncludeInGlobal, CanIncludeInGlobal: q.GlobalTrigger is not null)),
+            ],
+            plugin.SettingsTypes);
+
+    /// <summary>設定画面に出せない型のプロパティがあれば警告する（要件定義書 9.2、設計 8 章）。</summary>
+    private void WarnUnsupportedSettings(PluginInstance plugin)
+    {
+        foreach (var type in plugin.SettingsTypes)
+        {
+            try
+            {
+                SettingsSchema.Describe(type, out var unsupported);
+                if (unsupported.Count > 0)
+                {
+                    logger.LogWarning("{Plugin} の設定 {Type} の次のプロパティは、設定画面に出せない型なので表示しない: {Properties}",
+                        plugin.Manifest.Id, type.Name, string.Join("、", unsupported));
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "{Plugin} の設定 {Type} を設定画面に出せない", plugin.Manifest.Id, type.Name);
+            }
         }
     }
 
@@ -115,5 +168,6 @@ public sealed class PluginManager(
             }
         }
         _plugins.Clear();
+        _pluginInfos = [];
     }
 }

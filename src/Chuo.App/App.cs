@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace Chuo.App;
 
-public sealed class App(IHost host, bool showOnStart) : Application
+public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) : Application
 {
     private IDisposable? _hotkey;
 
@@ -60,9 +60,15 @@ public sealed class App(IHost host, bool showOnStart) : Application
         using var process = Process.GetCurrentProcess();
         logger.LogInformation("起動した（{Elapsed:F0}ms）", (DateTime.Now - process.StartTime).TotalMilliseconds);
 
+        var settingsLauncher = services.GetRequiredService<SettingsLauncher>();
+        settingsLauncher.Closed += window.TrimMemoryIfEnabled;
         if (showOnStart)
         {
             window.ShowLauncher();
+        }
+        else if (openSettingsOnStart)
+        {
+            settingsLauncher.Open();
         }
         else
         {

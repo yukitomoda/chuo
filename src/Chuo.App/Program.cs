@@ -46,11 +46,13 @@ internal static class Program
         services.AddSingleton<IClipboard, AvaloniaClipboard>();
         services.AddSingleton<IconCache>();
         services.AddSingleton<LauncherWindow>();
+        services.AddSingleton<SettingsLauncher>();
+        services.AddTransient<SettingsWindow>();
 
         using var host = builder.Build();
         var settings = host.Services.GetRequiredService<IOptions<ChuoSettings>>().Value;
 
-        var appBuilder = AppBuilder.Configure(() => new App(host, showOnStart: args.Contains("--show")))
+        var appBuilder = AppBuilder.Configure(() => new App(host, showOnStart: args.Contains("--show"), openSettingsOnStart: args.Contains("--settings")))
             .UsePlatformDetect();
         if (!settings.Rendering.UseGpu)
         {

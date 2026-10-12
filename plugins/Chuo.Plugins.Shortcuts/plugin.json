@@ -1,0 +1,7 @@
+{
+  "id": "chuo.shortcuts",
+  "name": "フォルダのショートカット",
+  "version": "1.0.0",
+  "entry": "Chuo.Plugins.Shortcuts.dll",
+  "hostApi": "1.x"
+}

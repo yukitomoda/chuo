@@ -12,6 +12,8 @@
 | `src/Chuo.Platform.Linux` | シェルのみ。ホットキーなどは未実装 |
 | `src/Chuo.App` | Avalonia の UI と汎用ホスト。実行ファイル名は `chuo` |
 | `plugins/Chuo.Plugins.Apps` | アプリ起動（カタログ、全体検索）。Windows はスタートメニュー、Linux は .desktop |
+| `plugins/Chuo.Plugins.Shortcuts` | フォルダのショートカット（カタログ、キーワード `l`）。設定したフォルダの `.lnk`、`.url`、`.exe`、`.bat`、`.cmd` |
+| `plugins/Shared` | 同梱プラグインで共有するソース（`.lnk` と `.desktop` の読み取り） |
 | `plugins/Chuo.Plugins.Calculator` | 電卓（ライブクエリ、グローバルトリガー） |
 | `plugins/Chuo.Plugins.WebSearch` | Web 検索（ライブクエリ、キーワード `g`） |
 | `tests/Chuo.Core.Tests` | 正規化、あいまい検索、検索、プラグインの読み込みとアンロード、電卓の式、.lnk と .desktop の読み取り |
@@ -34,6 +36,12 @@
 - [x] ファイルのアイコンの取得（Windows）と、アイコンの非同期の読み込み
 - Windows の実機で、検索、アイコンの表示、リンク先のパスの表示を確認した（2026-10-12）
 
+## 第3段階（2026-10-12）：設定画面とフォルダのショートカット
+
+- [x] 設定画面（9.1 のプラグインのページ、9.2）。Ctrl+, または `chuo --settings` で開く。プラグインの設定を Options クラスから生成し、変更はその場で `settings.json` に書き込んで反映する
+- [x] プロバイダごとのキーワードと全体検索に含めるかの上書き（2.1）
+- [x] フォルダのショートカットのプラグイン（7.3）
+
 ## 残りの作業
 
 順番は未定。
@@ -45,7 +53,7 @@
 - 使用履歴による順位付け、エイリアス、お気に入り、無視（3.2、6 章）
 - ローマ字での検索（読みの付与、3.3）
 - アクションパネル、プレビュー（5.2、8 章）
-- 設定画面（9.1、9.2）
+- 設定画面の残り：一般、項目、開発のページ、プラグインの有効・無効、`:settings`
 - テーマの上書き、ウィンドウの見た目の調整（8 章）
 - Linux（GNOME Shell 拡張）、`chuo install`、CI
 - 終了の操作は今は Ctrl+Shift+Q（仮）

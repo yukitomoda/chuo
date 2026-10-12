@@ -1,0 +1,375 @@
+using System.Text.Json.Nodes;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Chuo.Core.Plugins;
+using Chuo.Core.Search;
+using Chuo.Core.Settings;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace Chuo.App;
+
+/// <summary>
+/// 設定画面。常駐するメモリを増やさないよう、開くたびに作り、閉じたら捨てる（設計 8 章）。
+/// 変更はその場で <c>settings.json</c> に書き込み、構成の再読み込みで本体とプラグインに反映する（要件定義書 9.1）。
+/// TODO: 一般、項目、開発のページ。
+/// </summary>
+public sealed class SettingsWindow : Window
+{
+    /// <summary>テキストの入力は、打ち終わるまで待ってから書き込む。</summary>
+    private static readonly TimeSpan TextWriteDelay = TimeSpan.FromMilliseconds(500);
+
+    private readonly PluginManager _plugins;
+    private readonly IConfiguration _configuration;
+    private readonly SettingsStore _store;
+    private readonly ILogger _logger;
+    private readonly ContentControl _page = new();
+    private readonly TextBlock _status = new() { Margin = new Thickness(16, 8), TextWrapping = TextWrapping.Wrap };
+
+    public SettingsWindow(PluginManager plugins, IConfiguration configuration, SettingsStore store, ILogger<SettingsWindow> logger)
+    {
+        _plugins = plugins;
+        _configuration = configuration;
+        _store = store;
+        _logger = logger;
+
+        Title = "chuo の設定";
+        Width = 860;
+        Height = 620;
+        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+
+        var pluginList = new ListBox
+        {
+            ItemsSource = plugins.Plugins.OrderBy(p => p.Name, StringComparer.CurrentCulture).ToList(),
+            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<PluginInfo>((p, _) =>
+                new TextBlock { Text = p?.Name, Margin = new Thickness(4, 2) }),
+        };
+        pluginList.SelectionChanged += (_, _) =>
+        {
+            if (pluginList.SelectedItem is PluginInfo plugin)
+            {
+                ShowPlugin(plugin);
+            }
+        };
+
+        var navigation = new DockPanel { Width = 240 };
+        var heading = new TextBlock { Text = "プラグイン", FontWeight = FontWeight.SemiBold, Margin = new Thickness(12, 12, 12, 4) };
+        DockPanel.SetDock(heading, Dock.Top);
+        navigation.Children.Add(heading);
+        navigation.Children.Add(pluginList);
+
+        var body = new DockPanel();
+        DockPanel.SetDock(_status, Dock.Bottom);
+        body.Children.Add(_status);
+        body.Children.Add(new ScrollViewer { Content = _page, Padding = new Thickness(24, 16) });
+
+        var root = new DockPanel();
+        DockPanel.SetDock(navigation, Dock.Left);
+        root.Children.Add(navigation);
+        root.Children.Add(new Border { Width = 1, Background = Brushes.Gray, Opacity = 0.3 });
+        root.Children.Add(body);
+        Content = root;
+
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                Close();
+            }
+        };
+
+        if (pluginList.ItemCount > 0)
+        {
+            pluginList.SelectedIndex = 0;
+        }
+        else
+        {
+            _page.Content = new TextBlock { Text = "読み込んだプラグインはない。" };
+        }
+    }
+
+    private void ShowPlugin(PluginInfo plugin)
+    {
+        var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(new TextBlock { Text = plugin.Name, FontSize = 22, FontWeight = FontWeight.SemiBold });
+        panel.Children.Add(Caption($"{plugin.Id}  バージョン {plugin.Version}"));
+
+        foreach (var provider in plugin.Providers)
+        {
+            panel.Children.Add(SectionHeading(plugin.Providers.Count > 1 ? $"検索（{provider.Name}）" : "検索"));
+            AddProviderSettings(panel, plugin, provider);
+        }
+
+        foreach (var type in plugin.SettingsTypes)
+        {
+            panel.Children.Add(SectionHeading("設定"));
+            var section = _configuration.GetSection(PluginManager.SettingsSection(plugin.Id));
+            foreach (var field in SettingsSchema.Describe(type))
+            {
+                panel.Children.Add(CreateField(field, section, $"{PluginManager.SettingsSection(plugin.Id)}:{field.Key}"));
+            }
+        }
+
+        _page.Content = panel;
+        _status.Text = "";
+    }
+
+    /// <summary>キーワードと、全体検索に含めるかの上書き（要件定義書 2.1、9.1）。</summary>
+    private void AddProviderSettings(StackPanel panel, PluginInfo plugin, ProviderInfo provider)
+    {
+        var keywordKey = ProviderRegistry.ProviderSettingKey(plugin.Id, provider.Name, ProviderRegistry.KeywordKey);
+        var keyword = new TextBox
+        {
+            Text = _configuration[keywordKey] ?? provider.DefaultKeyword ?? "",
+            Width = 160,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        BindText(keyword, text => _store.Set(keywordKey, JsonValue.Create(text.Trim())));
+        panel.Children.Add(Labeled("キーワード", "入力の先頭にこの語と空白を付けると、このプラグインだけを検索する。空にするとキーワードなし", keyword));
+
+        if (provider.CanIncludeInGlobal)
+        {
+            var globalKey = ProviderRegistry.ProviderSettingKey(plugin.Id, provider.Name, ProviderRegistry.IncludeInGlobalKey);
+            var includeInGlobal = new CheckBox
+            {
+                Content = "全体検索に含める",
+                IsChecked = bool.TryParse(_configuration[globalKey], out var value) ? value : provider.DefaultIncludeInGlobal,
+            };
+            includeInGlobal.IsCheckedChanged += (_, _) => Write(() => _store.Set(globalKey, JsonValue.Create(includeInGlobal.IsChecked == true)));
+            panel.Children.Add(Labeled(null, "オフにすると、キーワードを付けたときだけ検索する", includeInGlobal));
+        }
+    }
+
+    private Control CreateField(SettingField field, IConfiguration section, string key)
+    {
+        var value = field.Read(section);
+        switch (field.Kind)
+        {
+            case SettingKind.Boolean:
+                var check = new CheckBox { Content = field.DisplayName, IsChecked = value as bool? ?? false };
+                check.IsCheckedChanged += (_, _) => Write(() => _store.Set(key, field.ToJson(check.IsChecked == true)));
+                return Labeled(null, field.Description, check);
+
+            case SettingKind.Integer or SettingKind.Number:
+                var number = new NumericUpDown
+                {
+                    Value = Convert.ToDecimal(value ?? 0),
+                    Minimum = field.Minimum is { } min ? (decimal)min : decimal.MinValue,
+                    Maximum = field.Maximum is { } max ? (decimal)max : decimal.MaxValue,
+                    Increment = 1,
+                    FormatString = field.Kind == SettingKind.Integer ? "0" : "",
+                    Width = 200,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                };
+                number.ValueChanged += (_, _) =>
+                {
+                    if (number.Value is { } v)
+                    {
+                        Write(() => _store.Set(key, field.ToJson(v)));
+                    }
+                };
+                return Labeled(field.DisplayName, field.Description, number);
+
+            case SettingKind.Choice:
+                var choice = new ComboBox { ItemsSource = field.Choices, SelectedItem = value as string, MinWidth = 200 };
+                choice.SelectionChanged += (_, _) => Write(() => _store.Set(key, field.ToJson(choice.SelectedItem as string)));
+                return Labeled(field.DisplayName, field.Description, choice);
+
+            case SettingKind.Text or SettingKind.Folder or SettingKind.File:
+                var text = new TextBox { Text = value as string ?? "" };
+                BindText(text, t => _store.Set(key, field.ToJson(t)));
+                var input = field.Kind == SettingKind.Text
+                    ? (Control)text
+                    : WithBrowseButton(text, field.Kind == SettingKind.Folder, path => text.Text = path);
+                return Labeled(field.DisplayName, field.Description, input);
+
+            default:
+                return Labeled(field.DisplayName, field.Description, CreateListEditor(field, (IReadOnlyList<string>)value!, key));
+        }
+    }
+
+    /// <summary>文字列のリストの編集。行ごとに削除でき、下の入力欄から追加する。</summary>
+    private Control CreateListEditor(SettingField field, IReadOnlyList<string> initial, string key)
+    {
+        var items = initial.ToList();
+        var rows = new StackPanel { Spacing = 4 };
+        var input = new TextBox { PlaceholderText = field.Kind == SettingKind.FolderList ? "フォルダのパス" : "" };
+
+        void Save() => Write(() => _store.Set(key, field.ToJson(items)));
+
+        void Render()
+        {
+            rows.Children.Clear();
+            if (items.Count == 0)
+            {
+                rows.Children.Add(Caption("（なし）"));
+            }
+            foreach (var item in items)
+            {
+                var remove = new Button { Content = "削除" };
+                remove.Click += (_, _) =>
+                {
+                    items.Remove(item);
+                    Render();
+                    Save();
+                };
+                var row = new DockPanel();
+                DockPanel.SetDock(remove, Dock.Right);
+                row.Children.Add(remove);
+                row.Children.Add(new TextBlock { Text = item, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+                rows.Children.Add(row);
+            }
+        }
+
+        void Add(string? text)
+        {
+            var value = text?.Trim();
+            if (string.IsNullOrEmpty(value) || items.Contains(value))
+            {
+                return;
+            }
+            items.Add(value);
+            input.Text = "";
+            Render();
+            Save();
+        }
+
+        input.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Add(input.Text);
+                e.Handled = true;
+            }
+        };
+        var addButton = new Button { Content = "追加" };
+        addButton.Click += (_, _) => Add(input.Text);
+
+        var addRow = new DockPanel();
+        DockPanel.SetDock(addButton, Dock.Right);
+        addRow.Children.Add(addButton);
+        if (field.Kind is SettingKind.FolderList or SettingKind.FileList)
+        {
+            var browse = new Button { Content = "参照…", Margin = new Thickness(0, 0, 4, 0) };
+            browse.Click += async (_, _) => Add(await BrowseAsync(field.Kind == SettingKind.FolderList));
+            DockPanel.SetDock(browse, Dock.Right);
+            addRow.Children.Add(browse);
+        }
+        addRow.Children.Add(input);
+
+        Render();
+        return new StackPanel { Spacing = 6, Children = { rows, addRow } };
+    }
+
+    private Control WithBrowseButton(TextBox text, bool folder, Action<string> picked)
+    {
+        var browse = new Button { Content = "参照…", Margin = new Thickness(4, 0, 0, 0) };
+        browse.Click += async (_, _) =>
+        {
+            if (await BrowseAsync(folder) is { } path)
+            {
+                picked(path);
+            }
+        };
+        var row = new DockPanel();
+        DockPanel.SetDock(browse, Dock.Right);
+        row.Children.Add(browse);
+        row.Children.Add(text);
+        return row;
+    }
+
+    private async Task<string?> BrowseAsync(bool folder)
+    {
+        try
+        {
+            if (folder)
+            {
+                var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "フォルダを選ぶ" });
+                return folders.FirstOrDefault()?.TryGetLocalPath();
+            }
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "ファイルを選ぶ" });
+            return files.FirstOrDefault()?.TryGetLocalPath();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "選択のダイアログを開けなかった");
+            ShowError("選択のダイアログを開けなかった。パスを直接入力してください。");
+            return null;
+        }
+    }
+
+    /// <summary>テキストの変更を、入力が止まってから書き込む。フォーカスを外したときはすぐに書き込む。</summary>
+    private void BindText(TextBox box, Action<string> write)
+    {
+        var timer = new DispatcherTimer { Interval = TextWriteDelay };
+        var pending = false;
+        // 表示しただけで TextChanged が起きることがあるので、値が変わったときだけ書き込む
+        var written = box.Text ?? "";
+        void Flush()
+        {
+            timer.Stop();
+            if (pending && (box.Text ?? "") != written)
+            {
+                written = box.Text ?? "";
+                Write(() => write(written));
+            }
+            pending = false;
+        }
+        timer.Tick += (_, _) => Flush();
+        box.TextChanged += (_, _) =>
+        {
+            pending = true;
+            timer.Stop();
+            timer.Start();
+        };
+        box.LostFocus += (_, _) => Flush();
+        Closing += (_, _) => Flush();
+    }
+
+    /// <summary>書き込みに失敗したら画面に出す（要件定義書 9.1）。</summary>
+    private void Write(Action write)
+    {
+        try
+        {
+            write();
+            _status.Text = "";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "設定を書き込めなかった");
+            ShowError($"設定を書き込めなかった: {ex.Message}");
+        }
+    }
+
+    private void ShowError(string message)
+    {
+        _status.Text = message;
+        _status.Foreground = Brushes.IndianRed;
+    }
+
+    private static Control Labeled(string? label, string? description, Control input)
+    {
+        var panel = new StackPanel { Spacing = 2, Margin = new Thickness(0, 4, 0, 4) };
+        if (label is not null)
+        {
+            panel.Children.Add(new TextBlock { Text = label });
+        }
+        panel.Children.Add(input);
+        if (!string.IsNullOrEmpty(description))
+        {
+            panel.Children.Add(Caption(description));
+        }
+        return panel;
+    }
+
+    private static TextBlock SectionHeading(string text) =>
+        new() { Text = text, FontSize = 16, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 16, 0, 0) };
+
+    private static TextBlock Caption(string text) =>
+        new() { Text = text, FontSize = 12, Opacity = 0.65, TextWrapping = TextWrapping.Wrap };
+}
