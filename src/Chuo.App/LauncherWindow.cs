@@ -1,11 +1,14 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Chuo.Abstractions;
@@ -78,6 +81,7 @@ public sealed class LauncherWindow : Window
             Margin = new Thickness(12, 0, 12, 12),
             IsVisible = false,
         };
+        AddSelectionStyles(_results);
         // 一覧をクリックしても入力欄からフォーカスを移さない
         _results.Focusable = false;
         _results.AddHandler(PointerReleasedEvent, (_, e) =>
@@ -400,6 +404,42 @@ public sealed class LauncherWindow : Window
                 _input.CaretIndex = setQuery.Text.Length;
                 break;
         }
+    }
+
+    private const string SelectedBackgroundKey = "ChuoSelectedBackground";
+    private const string SelectedPointerOverBackgroundKey = "ChuoSelectedPointerOverBackground";
+    private const string PointerOverBackgroundKey = "ChuoPointerOverBackground";
+
+    /// <summary>
+    /// 選択している行の背景。Fluent の既定はアクセントの色が濃く文字が読みにくいので、明るい色にする。
+    /// マウスを重ねた行は、選択している行より目立たないよう、それより淡くする。
+    /// </summary>
+    private static void AddSelectionStyles(ListBox list)
+    {
+        list.Resources.ThemeDictionaries[ThemeVariant.Light] = new ResourceDictionary
+        {
+            [SelectedBackgroundKey] = new SolidColorBrush(Color.Parse("#D3E8FB")),
+            [SelectedPointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#C5E0F9")),
+            [PointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#E6E6E6")),
+        };
+        list.Resources.ThemeDictionaries[ThemeVariant.Dark] = new ResourceDictionary
+        {
+            [SelectedBackgroundKey] = new SolidColorBrush(Color.Parse("#2F4F6F")),
+            [SelectedPointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#375C80")),
+            [PointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#3A3A3A")),
+        };
+
+        Style BackgroundStyle(Func<Selector?, Selector> state, string key) =>
+            new(x => state(x.OfType<ListBoxItem>()).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters = { new Setter(ContentPresenter.BackgroundProperty, new DynamicResourceExtension(key)) },
+            };
+
+        // 後に足したものが優先されるので、選択の状態を後に置く
+        list.Styles.Add(BackgroundStyle(x => x!.Class(":pointerover"), PointerOverBackgroundKey));
+        list.Styles.Add(BackgroundStyle(x => x!.Class(":selected"), SelectedBackgroundKey));
+        list.Styles.Add(BackgroundStyle(x => x!.Class(":selected").Class(":pointerover"), SelectedPointerOverBackgroundKey));
+        list.Styles.Add(BackgroundStyle(x => x!.Class(":selected").Class(":pressed"), SelectedPointerOverBackgroundKey));
     }
 
     /// <summary>アイコン、タイトル、サブタイトルを並べる行のテンプレート。</summary>
