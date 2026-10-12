@@ -60,7 +60,7 @@ public sealed class ShortcutCatalogProvider(IOptionsMonitor<ShortcutsOptions> op
                 var stopwatch = Stopwatch.StartNew();
                 var current = options.CurrentValue;
                 var extensions = OperatingSystem.IsWindows() ? ShortcutScanner.WindowsExtensions : ShortcutScanner.LinuxExtensions;
-                var items = ShortcutScanner.Scan(current.Folders, current.IncludeSubfolders, extensions)
+                var items = ShortcutScanner.Scan(current.Folders, extensions)
                     .Select(CreateItem)
                     .OfType<CatalogItem>()
                     .ToList();
@@ -79,9 +79,12 @@ public sealed class ShortcutCatalogProvider(IOptionsMonitor<ShortcutsOptions> op
     private void Watch(ShortcutsOptions current)
     {
         DisposeWatchers();
-        foreach (var folder in current.Folders.Where(f => !string.IsNullOrWhiteSpace(f)))
+        foreach (var folder in current.Folders)
         {
-            var root = Environment.ExpandEnvironmentVariables(folder.Trim());
+            if (ShortcutScanner.ResolvePath(folder) is not { } root)
+            {
+                continue;
+            }
             if (!Directory.Exists(root))
             {
                 logger.LogWarning("フォルダが見つからない: {Folder}", root);
@@ -89,7 +92,7 @@ public sealed class ShortcutCatalogProvider(IOptionsMonitor<ShortcutsOptions> op
             }
             try
             {
-                var watcher = new FileSystemWatcher(root) { IncludeSubdirectories = current.IncludeSubfolders };
+                var watcher = new FileSystemWatcher(root) { IncludeSubdirectories = folder.IncludeSubfolders };
                 watcher.Created += OnChanged;
                 watcher.Deleted += OnChanged;
                 watcher.Renamed += OnChanged;

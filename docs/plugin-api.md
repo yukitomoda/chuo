@@ -76,8 +76,15 @@ Options クラスを `AddPluginSettings<T>` で登録すると、ホストがプ
 ```csharp
 public sealed class ShortcutsOptions
 {
-    [Display(Name = "対象のフォルダ", Description = "この中のショートカットと実行ファイルを検索する", Order = 0), FolderPath]
-    public List<string> Folders { get; set; } = [];
+    [Display(Name = "対象のフォルダ", Description = "この中のショートカットと実行ファイルを検索する")]
+    public List<ShortcutFolder> Folders { get; set; } = [];
+}
+
+// リストの要素ごとの設定は、要素を設定のクラスにする
+public sealed class ShortcutFolder
+{
+    [Display(Name = "フォルダ", Order = 0), FolderPath]
+    public string Path { get; set; } = "";
 
     [Display(Name = "サブフォルダも対象にする", Order = 1)]
     public bool IncludeSubfolders { get; set; } = true;
@@ -97,8 +104,14 @@ public sealed class ShortcutsPlugin : IChuoPlugin
 | `string` | テキスト。`[FolderPath]` / `[FilePath]` を付けると「参照…」が付く |
 | 列挙型 | 選択肢 |
 | `List<string>` | 一覧と追加・削除。`[FolderPath]` / `[FilePath]` を付けると「参照…」が付く |
+| `List<T>`（T は設定のクラス） | 要素ごとに値を持つ一覧。下を参照 |
 
 - 表示名、説明、並び順は `[Display(Name, Description, Order)]` で指定する。
 - これ以外の型のプロパティは画面に出さず、読み込み時にログに警告を出す。
+- `List<T>` の要素のクラスにも、同じ型と属性が使える。
+  - 最初の `string` のプロパティ（並び順で最初のもの）が要素の代表になる。一覧に表示し、追加の入力欄でこの値を入れる。同じ値の要素は追加できない。`string` のプロパティがないクラスは対応しない。
+  - 残りのプロパティは、要素ごとに代表の値の下に入力欄が並ぶ。新しい要素は、それらに既定値を入れて作る。
+  - 要素の中のリストには対応しない。
+  - `settings.json` には、要素ごとにオブジェクトとして保存する（例：`"folders": [{ "path": "C:\\Tools", "includeSubfolders": false }]`）。
 - **リストの既定値は空にする。** 構成のバインドは既存のリストに値を追加するので、既定値を入れると設定の値がその後ろに足されてしまう。
 - キーワードと全体検索に含めるかの上書きは、ホストがすべてのプロバイダについて画面に出す。プラグインの設定に含める必要はない。

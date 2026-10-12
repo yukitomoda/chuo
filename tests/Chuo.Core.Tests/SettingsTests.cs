@@ -92,6 +92,65 @@ public class SettingsSchemaTests
         public string ReadOnly => "";
     }
 
+    public sealed class Entry
+    {
+        [Display(Order = 1)]
+        public bool Recursive { get; set; } = true;
+
+        [FolderPath]
+        public string Path { get; set; } = "";
+
+        public List<string> Nested { get; set; } = [];
+    }
+
+    public sealed class ObjectListOptions
+    {
+        public List<Entry> Entries { get; set; } = [];
+
+        // 文字列の値がない要素は、一覧に出せないので対応しない
+        public List<Recursive> NoPrimary { get; set; } = [];
+    }
+
+    public sealed class Recursive
+    {
+        public bool Value { get; set; }
+    }
+
+    [Fact]
+    public void 設定のクラスのリストは要素の入力欄を持つ()
+    {
+        var fields = SettingsSchema.Describe(typeof(ObjectListOptions), out var unsupported);
+
+        var entries = Assert.Single(fields);
+        Assert.Equal(SettingKind.ObjectList, entries.Kind);
+        Assert.Equal(["path", "recursive"], entries.ItemFields!.Select(f => f.Key));
+        Assert.Equal("path", entries.PrimaryItemField?.Key);
+        Assert.Equal(["Entry.Nested（List`1）", "NoPrimary（List`1）"], unsupported);
+    }
+
+    [Fact]
+    public void 設定のクラスのリストを読み書きする()
+    {
+        var entries = SettingsSchema.Describe(typeof(ObjectListOptions)).Single();
+        var section = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["entries:0:path"] = "/a",
+                ["entries:0:recursive"] = "false",
+                ["entries:1"] = "/b",
+            })
+            .Build();
+
+        var items = (List<Dictionary<string, object?>>)entries.Read(section)!;
+
+        Assert.Equal([("/a", false), ("/b", true)], items.Select(i => ((string?)i["path"], (bool?)i["recursive"])));
+        items.Add(entries.CreateItem("/c"));
+        Assert.Equal(
+            """[{"path":"/a","recursive":false},{"path":"/b","recursive":true},{"path":"/c","recursive":true}]""",
+            entries.ToJson(items)!.ToJsonString());
+        Assert.Equal([], (List<Dictionary<string, object?>>)entries.Read(new ConfigurationBuilder().Build())!);
+    }
+
     [Fact]
     public void プロパティから入力欄を作り_表示の順に並べる()
     {
@@ -204,15 +263,39 @@ public sealed class ShortcutScannerTests : IDisposable
 
     [Fact]
     public void 対象の拡張子のファイルだけを_サブフォルダも含めて探す() =>
-        Assert.Equal(["a.lnk", "b.EXE", "d.url"], Names(ShortcutScanner.Scan([_root], true, ShortcutScanner.WindowsExtensions)));
+        Assert.Equal(["a.lnk", "b.EXE", "d.url"], Names(ShortcutScanner.Scan([Folder(_root)], ShortcutScanner.WindowsExtensions)));
 
     [Fact]
     public void サブフォルダを対象にしない() =>
-        Assert.Equal(["a.lnk", "b.EXE"], Names(ShortcutScanner.Scan([_root], false, ShortcutScanner.WindowsExtensions)));
+        Assert.Equal(["a.lnk", "b.EXE"], Names(ShortcutScanner.Scan([Folder(_root, false)], ShortcutScanner.WindowsExtensions)));
 
     [Fact]
     public void 重なったフォルダと存在しないフォルダを扱う() =>
         Assert.Equal(
             ["a.lnk", "b.EXE", "d.url"],
-            Names(ShortcutScanner.Scan([_root, Path.Combine(_root, "sub"), Path.Combine(_root, "none"), " "], true, ShortcutScanner.WindowsExtensions)));
+            Names(ShortcutScanner.Scan(
+                [Folder(_root, false), Folder(Path.Combine(_root, "sub")), Folder(_root), Folder(Path.Combine(_root, "none")), Folder(" ")],
+                ShortcutScanner.WindowsExtensions)));
+
+    [Fact]
+    public void 以前の文字列のリストの設定も読める()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["folders:0"] = "/a",
+                ["folders:1:path"] = "/b",
+                ["folders:1:includeSubfolders"] = "false",
+            })
+            .Build();
+
+        var options = configuration.Get<ShortcutsOptions>()!;
+        ShortcutsPlugin.ReadPlainFolders(options, configuration);
+        var folders = options.Folders;
+
+        Assert.Equal([("/a", true), ("/b", false)], folders.Select(f => (f.Path, f.IncludeSubfolders)));
+    }
+
+    private static ShortcutFolder Folder(string path, bool includeSubfolders = true) =>
+        new() { Path = path, IncludeSubfolders = includeSubfolders };
 }

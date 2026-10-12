@@ -188,19 +188,114 @@ public sealed class SettingsWindow : Window
                     : WithBrowseButton(text, field.Kind == SettingKind.Folder, path => text.Text = path);
                 return Labeled(field.DisplayName, field.Description, input);
 
+            case SettingKind.ObjectList:
+                return Labeled(field.DisplayName, field.Description, CreateObjectListEditor(field, (List<Dictionary<string, object?>>)value!, key));
+
             default:
-                return Labeled(field.DisplayName, field.Description, CreateListEditor(field, (IReadOnlyList<string>)value!, key));
+                var strings = ((IReadOnlyList<string>)value!).ToList();
+                return Labeled(field.DisplayName, field.Description, CreateListEditor(
+                    strings, s => s, s => s, (_, _) => [], () => _store.Set(key, field.ToJson(strings)),
+                    field.Kind switch { SettingKind.FolderList => true, SettingKind.FileList => false, _ => null }));
         }
     }
 
-    /// <summary>文字列のリストの編集。行ごとに削除でき、下の入力欄から追加する。</summary>
-    private Control CreateListEditor(SettingField field, IReadOnlyList<string> initial, string key)
+    /// <summary>設定のクラスのリストの編集。代表の値（パスなど）を一覧に出し、残りの値は行の中で編集する。</summary>
+    private Control CreateObjectListEditor(SettingField field, List<Dictionary<string, object?>> items, string key)
     {
-        var items = initial.ToList();
-        var rows = new StackPanel { Spacing = 4 };
-        var input = new TextBox { PlaceholderText = field.Kind == SettingKind.FolderList ? "フォルダのパス" : "" };
+        var primary = field.PrimaryItemField!;
+        void Save() => _store.Set(key, field.ToJson(items));
 
-        void Save() => Write(() => _store.Set(key, field.ToJson(items)));
+        IEnumerable<Control> CreateItemControls(Dictionary<string, object?> item, Action save)
+        {
+            foreach (var itemField in field.ItemFields!.Where(f => f != primary))
+            {
+                if (CreateItemControl(itemField, item, save) is { } control)
+                {
+                    yield return control;
+                }
+            }
+        }
+
+        return CreateListEditor(
+            items, item => item.GetValueOrDefault(primary.Key) as string ?? "", field.CreateItem, CreateItemControls, Save,
+            primary.Kind switch { SettingKind.Folder => true, SettingKind.File => false, _ => null });
+    }
+
+    /// <summary>リストの要素の、代表以外の値1つ分の入力欄。</summary>
+    private Control? CreateItemControl(SettingField field, Dictionary<string, object?> item, Action save)
+    {
+        var value = item.GetValueOrDefault(field.Key) ?? field.DefaultValue;
+        switch (field.Kind)
+        {
+            case SettingKind.Boolean:
+                var check = new CheckBox { Content = field.DisplayName, IsChecked = value as bool? ?? false };
+                check.IsCheckedChanged += (_, _) =>
+                {
+                    item[field.Key] = check.IsChecked == true;
+                    Write(save);
+                };
+                ToolTip.SetTip(check, field.Description);
+                return check;
+
+            case SettingKind.Integer or SettingKind.Number:
+                var number = new NumericUpDown
+                {
+                    Value = Convert.ToDecimal(value ?? 0),
+                    Minimum = field.Minimum is { } min ? (decimal)min : decimal.MinValue,
+                    Maximum = field.Maximum is { } max ? (decimal)max : decimal.MaxValue,
+                    FormatString = field.Kind == SettingKind.Integer ? "0" : "",
+                    Width = 120,
+                };
+                number.ValueChanged += (_, _) =>
+                {
+                    if (number.Value is { } v)
+                    {
+                        item[field.Key] = field.Kind == SettingKind.Integer ? (long)v : (double)v;
+                        Write(save);
+                    }
+                };
+                return ItemLabeled(field, number);
+
+            case SettingKind.Choice:
+                var choice = new ComboBox { ItemsSource = field.Choices, SelectedItem = value as string, MinWidth = 120 };
+                choice.SelectionChanged += (_, _) =>
+                {
+                    item[field.Key] = choice.SelectedItem as string;
+                    Write(save);
+                };
+                return ItemLabeled(field, choice);
+
+            case SettingKind.Text or SettingKind.Folder or SettingKind.File:
+                var text = new TextBox { Text = value as string ?? "", Width = 200 };
+                BindText(text, t =>
+                {
+                    item[field.Key] = t;
+                    save();
+                });
+                return ItemLabeled(field, field.Kind == SettingKind.Text
+                    ? text
+                    : WithBrowseButton(text, field.Kind == SettingKind.Folder, path => text.Text = path));
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// リストの編集。行ごとに削除でき、下の入力欄から追加する。
+    /// </summary>
+    /// <param name="label">一覧に出す文字列。重複の判定にも使う。</param>
+    /// <param name="create">入力欄の文字列から要素を作る。</param>
+    /// <param name="itemControls">行に並べる、要素の値を編集する入力欄。</param>
+    /// <param name="browseFolder">true ならフォルダ、false ならファイルの「参照…」を付ける。null なら付けない。</param>
+    private Control CreateListEditor<T>(
+        List<T> items, Func<T, string> label, Func<string, T> create,
+        Func<T, Action, IEnumerable<Control>> itemControls, Action save, bool? browseFolder)
+    {
+        var rows = new StackPanel { Spacing = 4 };
+        var input = new TextBox { PlaceholderText = browseFolder == true ? "フォルダのパス" : "" };
+
+        void Save() => Write(save);
 
         void Render()
         {
@@ -211,29 +306,46 @@ public sealed class SettingsWindow : Window
             }
             foreach (var item in items)
             {
-                var remove = new Button { Content = "削除" };
+                var remove = new Button { Content = "削除", Margin = new Thickness(8, 0, 0, 0) };
                 remove.Click += (_, _) =>
                 {
                     items.Remove(item);
                     Render();
                     Save();
                 };
-                var row = new DockPanel();
+                var header = new DockPanel();
                 DockPanel.SetDock(remove, Dock.Right);
-                row.Children.Add(remove);
-                row.Children.Add(new TextBlock { Text = item, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
-                rows.Children.Add(row);
+                header.Children.Add(remove);
+                var text = label(item);
+                var title = new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                ToolTip.SetTip(title, text);
+                header.Children.Add(title);
+
+                // 要素の値の入力欄は、数が増えても収まるよう、代表の値の下に折り返して並べる
+                var controls = itemControls(item, save).ToList();
+                if (controls.Count == 0)
+                {
+                    rows.Children.Add(header);
+                    continue;
+                }
+                var values = new WrapPanel { Margin = new Thickness(16, 2, 0, 0) };
+                foreach (var control in controls)
+                {
+                    control.Margin = new Thickness(0, 0, 12, 4);
+                    values.Children.Add(control);
+                }
+                rows.Children.Add(new StackPanel { Margin = new Thickness(0, 0, 0, 6), Children = { header, values } });
             }
         }
 
         void Add(string? text)
         {
             var value = text?.Trim();
-            if (string.IsNullOrEmpty(value) || items.Contains(value))
+            if (string.IsNullOrEmpty(value) || items.Any(i => label(i) == value))
             {
                 return;
             }
-            items.Add(value);
+            items.Add(create(value));
             input.Text = "";
             Render();
             Save();
@@ -253,10 +365,10 @@ public sealed class SettingsWindow : Window
         var addRow = new DockPanel();
         DockPanel.SetDock(addButton, Dock.Right);
         addRow.Children.Add(addButton);
-        if (field.Kind is SettingKind.FolderList or SettingKind.FileList)
+        if (browseFolder is { } folder)
         {
             var browse = new Button { Content = "参照…", Margin = new Thickness(0, 0, 4, 0) };
-            browse.Click += async (_, _) => Add(await BrowseAsync(field.Kind == SettingKind.FolderList));
+            browse.Click += async (_, _) => Add(await BrowseAsync(folder));
             DockPanel.SetDock(browse, Dock.Right);
             addRow.Children.Add(browse);
         }
@@ -264,6 +376,15 @@ public sealed class SettingsWindow : Window
 
         Render();
         return new StackPanel { Spacing = 6, Children = { rows, addRow } };
+    }
+
+    /// <summary>リストの要素の値に、表示名を左に付ける。</summary>
+    private static Control ItemLabeled(SettingField field, Control input)
+    {
+        var label = new TextBlock { Text = field.DisplayName, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        ToolTip.SetTip(label, field.Description);
+        input.VerticalAlignment = VerticalAlignment.Center;
+        return new StackPanel { Orientation = Orientation.Horizontal, Children = { label, input } };
     }
 
     private Control WithBrowseButton(TextBox text, bool folder, Action<string> picked)
