@@ -60,6 +60,14 @@ internal sealed class ProviderCatalog : ICatalog
         }
     }
 
+    public IndexedItem? Find(string id)
+    {
+        lock (_gate)
+        {
+            return _items.GetValueOrDefault(id);
+        }
+    }
+
     /// <summary>検索用の一覧。変更がなければ同じ配列を使い回す。</summary>
     public IndexedItem[] Snapshot()
     {

@@ -15,6 +15,9 @@ public static class ChuoPaths
 
     public static string SettingsFile => Path.Combine(ConfigDirectory, "settings.json");
 
+    /// <summary>項目ごとのユーザー設定（お気に入り、無視など）。</summary>
+    public static string ItemsFile => Path.Combine(ConfigDirectory, "items.json");
+
     public static string LogDirectory => Path.Combine(DataDirectory, "logs");
 
     /// <summary>本体に同梱するプラグインのフォルダ。</summary>

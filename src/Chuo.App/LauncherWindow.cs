@@ -7,8 +7,10 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Chuo.Abstractions;
 using Chuo.Core;
+using Chuo.Core.Items;
 using Chuo.Core.Platform;
 using Chuo.Core.Search;
 using Microsoft.Extensions.Logging;
@@ -29,6 +31,7 @@ public sealed class LauncherWindow : Window
     private readonly ILauncherWindowIntegration _integration;
     private readonly IconCache _icons;
     private readonly SettingsLauncher _settingsLauncher;
+    private readonly ItemPreferences _preferences;
     private readonly IOptionsMonitor<ChuoSettings> _settings;
     private readonly ILogger<LauncherWindow> _logger;
     private readonly TextBox _input;
@@ -36,10 +39,11 @@ public sealed class LauncherWindow : Window
     private CancellationTokenSource? _searchCancellation;
     private bool _prewarming;
     private bool _hiding;
+    private bool _menuOpen;
 
     public LauncherWindow(
         SearchService search, IShell shell, IClipboard clipboard, ILauncherWindowIntegration integration, IconCache icons,
-        SettingsLauncher settingsLauncher, IOptionsMonitor<ChuoSettings> settings, ILogger<LauncherWindow> logger)
+        SettingsLauncher settingsLauncher, ItemPreferences preferences, IOptionsMonitor<ChuoSettings> settings, ILogger<LauncherWindow> logger)
     {
         _search = search;
         _shell = shell;
@@ -47,6 +51,7 @@ public sealed class LauncherWindow : Window
         _integration = integration;
         _icons = icons;
         _settingsLauncher = settingsLauncher;
+        _preferences = preferences;
         _settings = settings;
         _logger = logger;
 
@@ -75,14 +80,22 @@ public sealed class LauncherWindow : Window
         };
         // 一覧をクリックしても入力欄からフォーカスを移さない
         _results.Focusable = false;
-        _results.AddHandler(PointerReleasedEvent, (_, _) => ExecuteSelected(0), RoutingStrategies.Bubble, handledEventsToo: true);
+        _results.AddHandler(PointerReleasedEvent, (_, e) =>
+        {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+            {
+                ExecuteSelected(0);
+            }
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
+        _results.ContextRequested += OnResultContextRequested;
 
         Content = new StackPanel { Children = { _input, _results } };
 
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         Deactivated += (_, _) =>
         {
-            if (!_prewarming && IsVisible)
+            // 右クリックのメニューを開いている間は、ウィンドウが非アクティブになっても隠さない
+            if (!_prewarming && !_menuOpen && IsVisible)
             {
                 HideLauncher();
             }
@@ -141,6 +154,11 @@ public sealed class LauncherWindow : Window
             // 前回の入力を残しておき、打ち始めたら置き換わるように全選択する
             _input.SelectAll();
         }
+        if (string.IsNullOrEmpty(_input.Text))
+        {
+            // 入力が空のときはお気に入りを出す。入力が変わらないと検索しないので、ここで検索する
+            OnInputChanged();
+        }
         _input.Focus();
     }
 
@@ -183,7 +201,7 @@ public sealed class LauncherWindow : Window
         }
     }
 
-    private async void OnInputChanged()
+    private async void OnInputChanged(int selectIndex = 0)
     {
         _searchCancellation?.Cancel();
         _searchCancellation?.Dispose();
@@ -210,8 +228,97 @@ public sealed class LauncherWindow : Window
         }
         _results.ItemsSource = results;
         _results.IsVisible = results.Count > 0;
-        _results.SelectedIndex = results.Count > 0 ? 0 : -1;
+        _results.SelectedIndex = results.Count > 0 ? Math.Min(selectIndex, results.Count - 1) : -1;
     }
+
+    /// <summary>お気に入りや無視を変えた後に、選択の位置を保ったまま検索し直す。</summary>
+    private void Refresh() => OnInputChanged(Math.Max(0, _results.SelectedIndex));
+
+    private void ToggleFavorite(SearchResult result)
+    {
+        var favorite = !_preferences.Current.IsFavorite(result.GlobalId);
+        UpdatePreference(() => _preferences.SetFavorite(result.GlobalId, favorite));
+    }
+
+    private void ToggleIgnored(SearchResult result)
+    {
+        var ignored = !_preferences.Current.IsIgnored(result.GlobalId);
+        UpdatePreference(() => _preferences.SetIgnored(result.GlobalId, ignored));
+    }
+
+    private void UpdatePreference(Action update)
+    {
+        try
+        {
+            update();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "項目ごとのユーザー設定を書き込めなかった");
+            return;
+        }
+        Refresh();
+    }
+
+    /// <summary>右クリックで、項目のアクションと、お気に入りや無視の操作のメニューを出す。</summary>
+    private void OnResultContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not { DataContext: SearchResult result } container)
+        {
+            return;
+        }
+        _results.SelectedItem = result;
+        e.Handled = true;
+
+        var menuItems = new List<Control>();
+        for (var i = 0; i < result.Item.Actions.Count; i++)
+        {
+            var index = i;
+            menuItems.Add(MenuItemFor(result.Item.Actions[i].Title, ActionGesture(i), () => ExecuteSelected(index)));
+        }
+        if (menuItems.Count > 0)
+        {
+            menuItems.Add(new Separator());
+        }
+        var preference = _preferences.Current;
+        menuItems.Add(MenuItemFor(
+            preference.IsFavorite(result.GlobalId) ? "お気に入りから外す" : "お気に入りに追加", "Ctrl+D", () => ToggleFavorite(result)));
+        menuItems.Add(MenuItemFor(
+            preference.IsIgnored(result.GlobalId) ? "無視を解除" : "無視する", "Ctrl+Delete", () => ToggleIgnored(result)));
+
+        var menu = new ContextMenu { ItemsSource = menuItems };
+        menu.Opened += (_, _) => _menuOpen = true;
+        menu.Closed += (_, _) =>
+        {
+            _menuOpen = false;
+            _input.Focus();
+        };
+        menu.Open(container);
+    }
+
+    private static MenuItem MenuItemFor(string header, string? gesture, Action execute)
+    {
+        // InputGesture では Enter が「Return」と表示されるので、キーの表示は自分で並べる
+        var content = new DockPanel { MinWidth = 220 };
+        if (gesture is not null)
+        {
+            var key = new TextBlock { Text = gesture, Opacity = 0.6, Margin = new Thickness(24, 0, 0, 0) };
+            DockPanel.SetDock(key, Dock.Right);
+            content.Children.Add(key);
+        }
+        content.Children.Add(new TextBlock { Text = header });
+        var item = new MenuItem { Header = content };
+        item.Click += (_, _) => execute();
+        return item;
+    }
+
+    /// <summary>アクションに割り当てたキー（<see cref="OnPreviewKeyDown"/> と合わせる）。</summary>
+    private static string? ActionGesture(int index) => index switch
+    {
+        0 => "Enter",
+        1 => "Ctrl+Enter",
+        _ => null,
+    };
 
     private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
@@ -229,6 +336,14 @@ public sealed class LauncherWindow : Window
             case Key.Enter:
                 // 2つめ以降のアクションは修飾キーに割り当てる（要件定義書 5.2）
                 ExecuteSelected(e.KeyModifiers.HasFlag(KeyModifiers.Control) ? 1 : 0);
+                break;
+            case Key.D when e.KeyModifiers == KeyModifiers.Control && _results.SelectedItem is SearchResult favorite:
+                // お気に入りの追加と削除（要件定義書 6.2）
+                ToggleFavorite(favorite);
+                break;
+            case Key.Delete when e.KeyModifiers == KeyModifiers.Control && _results.SelectedItem is SearchResult ignored:
+                // 無視と、その解除（要件定義書 6.3）
+                ToggleIgnored(ignored);
                 break;
             case Key.OemComma when e.KeyModifiers == KeyModifiers.Control:
                 // 設定画面を開く（要件定義書 9.1）
@@ -295,16 +410,19 @@ public sealed class LauncherWindow : Window
             var title = new TextBlock { FontSize = 15, TextTrimming = TextTrimming.CharacterEllipsis };
             var subtitle = new TextBlock { FontSize = 11, Opacity = 0.6, TextTrimming = TextTrimming.CharacterEllipsis };
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { title, subtitle } };
-            var row = new DockPanel { Children = { icon, text } };
+            var favorite = new TextBlock { Text = "★", FontSize = 14, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) };
+            var row = new DockPanel { Children = { icon, favorite, text } };
             DockPanel.SetDock(icon, Dock.Left);
+            DockPanel.SetDock(favorite, Dock.Right);
 
             // 行は使い回されるので、DataContext が変わるたびに中身を差し替える
             row.DataContextChanged += async (_, _) =>
             {
-                if (row.DataContext is not SearchResult { Item: var item })
+                if (row.DataContext is not SearchResult { Item: var item } result)
                 {
                     return;
                 }
+                favorite.IsVisible = _preferences.Current.IsFavorite(result.GlobalId);
                 title.Text = item.Title;
                 subtitle.Text = item.Subtitle;
                 subtitle.IsVisible = !string.IsNullOrEmpty(item.Subtitle);

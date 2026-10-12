@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Chuo.Abstractions;
+using Chuo.Core.Items;
 using Chuo.Core.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,9 +14,21 @@ public sealed record SearchResult(ResultItem Item, string PluginId, int Score)
     public string GlobalId => $"{PluginId}:{Item.Id}";
 }
 
-/// <summary>入力に応じて、カタログ型とライブクエリ型のプロバイダから結果を集めて順位を付ける（設計 3 章）。</summary>
-public sealed class SearchService(ProviderRegistry registry, IOptionsMonitor<ChuoSettings> settings, ILogger<SearchService> logger)
+/// <summary>
+/// 入力に応じて、カタログ型とライブクエリ型のプロバイダから結果を集めて順位を付ける（設計 3 章）。
+/// お気に入りは加点し、無視した項目は除く（要件定義書 6 章）。
+/// </summary>
+public sealed class SearchService(
+    ProviderRegistry registry, IOptionsMonitor<ChuoSettings> settings, ILogger<SearchService> logger, ItemPreferences? preferences = null)
 {
+    /// <summary>無視した項目の一覧を出すコマンド（要件定義書 6.3）。</summary>
+    public const string IgnoredCommand = ":ignored";
+
+    /// <summary>
+    /// お気に入りへの加点。連続した一致の減点（最大でおよそ 600）より大きくし、一致の度合いが近ければお気に入りが上に来るようにする。
+    /// </summary>
+    internal const int FavoriteBonus = 5_000;
+
     /// <summary>
     /// 検索する。UI スレッドを止めないよう、処理はスレッドプールで行う。
     /// キーが押されるたびに前の検索をキャンセルすること。
@@ -25,12 +38,22 @@ public sealed class SearchService(ProviderRegistry registry, IOptionsMonitor<Chu
 
     private async Task<IReadOnlyList<SearchResult>> SearchCoreAsync(string text, CancellationToken cancellationToken)
     {
+        var limit = Math.Max(1, settings.CurrentValue.MaxResults);
+        var preference = preferences?.Current ?? ItemPreferenceSnapshot.Empty;
         if (string.IsNullOrWhiteSpace(text))
         {
-            return [];
+            // 入力が空のときは、お気に入りを指定した順に出す（要件定義書 6.2）
+            return [.. preference.FavoritesInOrder
+                .Where(id => !preference.IsIgnored(id))
+                .Select(Find)
+                .OfType<SearchResult>()
+                .Take(limit)];
+        }
+        if (text == IgnoredCommand || text.StartsWith(IgnoredCommand + " ", StringComparison.Ordinal))
+        {
+            return SearchIgnored(preference, text[IgnoredCommand.Length..].Trim(), limit);
         }
 
-        var limit = Math.Max(1, settings.CurrentValue.MaxResults);
         var (keyword, body) = SplitKeyword(text);
 
         IEnumerable<CatalogRegistration> catalogs;
@@ -53,11 +76,52 @@ public sealed class SearchService(ProviderRegistry registry, IOptionsMonitor<Chu
         }
 
         var liveTask = QueryLiveAsync(liveQueries, cancellationToken);
-        var catalogResults = SearchCatalogs(catalogs, TextNormalizer.Normalize(catalogPattern.Trim()), limit, cancellationToken);
-        var liveResults = await liveTask;
+        var catalogResults = SearchCatalogs(catalogs, TextNormalizer.Normalize(catalogPattern.Trim()), preference, limit, cancellationToken);
+        var liveResults = (await liveTask).Where(r => !preference.IsIgnored(r.GlobalId));
 
         // ライブクエリの結果は、明示的に呼び出したもの（キーワードかグローバルトリガー）なので上に置く
         return [.. liveResults.Concat(catalogResults).Take(limit)];
+    }
+
+    /// <summary>
+    /// 無視した項目を出す。カタログにない項目（プラグインを外した、ライブクエリの結果など）は、識別子だけを出す。
+    /// </summary>
+    private List<SearchResult> SearchIgnored(ItemPreferenceSnapshot preference, string pattern, int limit)
+    {
+        var normalized = TextNormalizer.Normalize(pattern);
+        var results = new List<SearchResult>();
+        foreach (var id in preference.Ignored.Order(StringComparer.Ordinal))
+        {
+            var result = Find(id) ?? Unresolved(id);
+            var score = pattern.Length == 0 ? 0 : FuzzyMatcher.Score(normalized, TextNormalizer.Normalize(result.Item.Title));
+            if (score is not null)
+            {
+                results.Add(result with { Score = score.Value });
+            }
+        }
+        return [.. results.OrderByDescending(r => r.Score).ThenBy(r => r.Item.Title, StringComparer.CurrentCulture).Take(limit)];
+    }
+
+    private static SearchResult Unresolved(string globalId)
+    {
+        var separator = globalId.IndexOf(':');
+        var pluginId = separator < 0 ? "" : globalId[..separator];
+        var item = new ResultItem { Id = globalId[(separator + 1)..], Title = globalId, Subtitle = "今は見つからない項目", Actions = [] };
+        return new SearchResult(item, pluginId, 0);
+    }
+
+    /// <summary>グローバルな識別子から、カタログの項目を探す。</summary>
+    private SearchResult? Find(string globalId)
+    {
+        foreach (var registration in registry.Catalogs)
+        {
+            var prefix = registration.PluginId + ":";
+            if (globalId.StartsWith(prefix, StringComparison.Ordinal) && registration.Catalog.Find(globalId[prefix.Length..]) is { } item)
+            {
+                return new SearchResult(item.Item, registration.PluginId, 0);
+            }
+        }
+        return null;
     }
 
     /// <summary>先頭の語が登録済みのキーワードで、その後に空白があればキーワードとして扱う（例: <c>g rust</c>）。</summary>
@@ -76,17 +140,23 @@ public sealed class SearchService(ProviderRegistry registry, IOptionsMonitor<Chu
     }
 
     private static List<SearchResult> SearchCatalogs(
-        IEnumerable<CatalogRegistration> catalogs, string pattern, int limit, CancellationToken cancellationToken)
+        IEnumerable<CatalogRegistration> catalogs, string pattern, ItemPreferenceSnapshot preference, int limit, CancellationToken cancellationToken)
     {
         var results = new List<SearchResult>();
         foreach (var registration in catalogs)
         {
             foreach (var item in registration.Catalog.Snapshot())
             {
-                if (item.Score(pattern) is { } score)
+                if (item.Score(pattern) is not { } score)
                 {
-                    results.Add(new SearchResult(item.Item, registration.PluginId, score));
+                    continue;
                 }
+                var result = new SearchResult(item.Item, registration.PluginId, score);
+                if (preference.IsIgnored(result.GlobalId))
+                {
+                    continue;
+                }
+                results.Add(preference.IsFavorite(result.GlobalId) ? result with { Score = score + FavoriteBonus } : result);
             }
             cancellationToken.ThrowIfCancellationRequested();
         }

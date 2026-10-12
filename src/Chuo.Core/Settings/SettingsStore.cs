@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Chuo.Core.Settings;
@@ -9,19 +8,7 @@ namespace Chuo.Core.Settings;
 /// </summary>
 public sealed class SettingsStore(string path)
 {
-    private static readonly JsonSerializerOptions WriteOptions = new()
-    {
-        WriteIndented = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
-
     private static readonly JsonNodeOptions NodeOptions = new() { PropertyNameCaseInsensitive = true };
-
-    private static readonly JsonDocumentOptions ReadOptions = new()
-    {
-        CommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-    };
 
     private readonly Lock _gate = new();
 
@@ -37,7 +24,7 @@ public sealed class SettingsStore(string path)
         var segments = key.Split(KeySeparator);
         lock (_gate)
         {
-            var root = Read();
+            var root = JsonFile.ReadObject(path, NodeOptions);
             var parent = root;
             foreach (var segment in segments[..^1])
             {
@@ -61,32 +48,8 @@ public sealed class SettingsStore(string path)
             {
                 SetProperty(parent, segments[^1], value);
             }
-            Write(root);
+            JsonFile.WriteAtomic(path, root);
         }
-    }
-
-    private JsonObject Read()
-    {
-        if (!File.Exists(path))
-        {
-            return new JsonObject(NodeOptions);
-        }
-        var text = File.ReadAllText(path);
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return new JsonObject(NodeOptions);
-        }
-        return JsonNode.Parse(text, NodeOptions, ReadOptions) as JsonObject
-            ?? throw new InvalidDataException($"{path} の最上位がオブジェクトではない");
-    }
-
-    /// <summary>書き込みの途中で壊れたファイルを読まれないよう、一時ファイルに書いてから置き換える。</summary>
-    private void Write(JsonObject root)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temporary = path + ".tmp";
-        File.WriteAllText(temporary, root.ToJsonString(WriteOptions));
-        File.Move(temporary, path, overwrite: true);
     }
 
     /// <summary>既存のキーは、大文字と小文字が違っても元の綴りのまま置き換える。</summary>
