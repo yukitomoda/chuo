@@ -38,6 +38,17 @@
              RemoveProperties="RuntimeIdentifier;SelfContained;PublishReadyToRun;_IsPublishing" />
   </Target>
 
+  <!--
+    SkiaSharp と HarfBuzzSharp のパッケージに入っているネイティブの pdb（合わせて約 100MB）は発行しない。
+    ネイティブのクラッシュダンプを解析するときにしか使わない。chuo 自身の pdb は、ログの例外に行番号を出すために残す。
+  -->
+  <Target Name="ExcludeNativePdbFromPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(Extension)' == '.pdb' and ('%(Filename)' == 'libSkiaSharp' or '%(Filename)' == 'libHarfBuzzSharp')" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="PublishBundledPlugins" AfterTargets="Publish">
     <MSBuild Projects="@(BundledPlugin)" Targets="Publish"
              Properties="Configuration=$(Configuration);PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)'))plugins/%(BundledPlugin.Filename)/"
