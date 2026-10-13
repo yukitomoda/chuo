@@ -6,6 +6,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Chuo.Abstractions;
+using Chuo.Core;
 using Chuo.Core.Plugins;
 using Chuo.Core.Search;
 using Chuo.Core.Settings;
@@ -17,7 +19,7 @@ namespace Chuo.App;
 /// <summary>
 /// 設定画面。常駐するメモリを増やさないよう、開くたびに作り、閉じたら捨てる（設計 8 章）。
 /// 変更はその場で <c>settings.json</c> に書き込み、構成の再読み込みで本体とプラグインに反映する（要件定義書 9.1）。
-/// TODO: 一般、項目、開発のページ。
+/// TODO: 一般のページの設定、項目、開発のページ。
 /// </summary>
 public sealed class SettingsWindow : Window
 {
@@ -27,15 +29,20 @@ public sealed class SettingsWindow : Window
     private readonly PluginManager _plugins;
     private readonly IConfiguration _configuration;
     private readonly SettingsStore _store;
+    private readonly IShell _shell;
+    private readonly IClipboard _clipboard;
     private readonly ILogger _logger;
     private readonly ContentControl _page = new();
     private readonly TextBlock _status = new() { Margin = new Thickness(16, 8), TextWrapping = TextWrapping.Wrap };
 
-    public SettingsWindow(PluginManager plugins, IConfiguration configuration, SettingsStore store, ILogger<SettingsWindow> logger)
+    public SettingsWindow(
+        PluginManager plugins, IConfiguration configuration, SettingsStore store, IShell shell, IClipboard clipboard, ILogger<SettingsWindow> logger)
     {
         _plugins = plugins;
         _configuration = configuration;
         _store = store;
+        _shell = shell;
+        _clipboard = clipboard;
         _logger = logger;
 
         Title = "chuo の設定";
@@ -49,19 +56,33 @@ public sealed class SettingsWindow : Window
             ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<PluginInfo>((p, _) =>
                 new TextBlock { Text = p?.Name, Margin = new Thickness(4, 2) }),
         };
+        // 本体のページとプラグインの一覧は別の ListBox にし、片方を選んだらもう片方の選択を外す
+        var generalList = new ListBox { ItemsSource = new[] { "一般" } };
+        generalList.ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((t, _) =>
+            new TextBlock { Text = t, Margin = new Thickness(4, 2) });
+        generalList.SelectionChanged += (_, _) =>
+        {
+            if (generalList.SelectedIndex >= 0)
+            {
+                pluginList.SelectedIndex = -1;
+                ShowGeneral();
+            }
+        };
         pluginList.SelectionChanged += (_, _) =>
         {
             if (pluginList.SelectedItem is PluginInfo plugin)
             {
+                generalList.SelectedIndex = -1;
                 ShowPlugin(plugin);
             }
         };
 
-        var navigation = new DockPanel { Width = 240 };
-        var heading = new TextBlock { Text = "プラグイン", FontWeight = FontWeight.SemiBold, Margin = new Thickness(12, 12, 12, 4) };
-        DockPanel.SetDock(heading, Dock.Top);
-        navigation.Children.Add(heading);
-        navigation.Children.Add(pluginList);
+        var heading = new TextBlock { Text = "プラグイン", FontWeight = FontWeight.SemiBold, Margin = new Thickness(12, 16, 12, 4) };
+        var navigation = new ScrollViewer
+        {
+            Width = 240,
+            Content = new StackPanel { Margin = new Thickness(0, 8, 0, 0), Children = { generalList, heading, pluginList } },
+        };
 
         var body = new DockPanel();
         DockPanel.SetDock(_status, Dock.Bottom);
@@ -83,13 +104,57 @@ public sealed class SettingsWindow : Window
             }
         };
 
-        if (pluginList.ItemCount > 0)
+        generalList.SelectedIndex = 0;
+    }
+
+    /// <summary>一般のページ。TODO: ホットキー、自動起動、テーマ、表示位置、最大表示件数、IME（要件定義書 9.1）。</summary>
+    private void ShowGeneral()
+    {
+        var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(new TextBlock { Text = "一般", FontSize = 22, FontWeight = FontWeight.SemiBold });
+
+        panel.Children.Add(SectionHeading("ログ"));
+        var directory = ChuoPaths.LogDirectory;
+        var path = new SelectableTextBlock { Text = directory, TextWrapping = TextWrapping.Wrap };
+        var open = new Button { Content = "フォルダを開く" };
+        open.Click += (_, _) => Run("ログのフォルダを開けなかった", () =>
         {
-            pluginList.SelectedIndex = 0;
+            Directory.CreateDirectory(directory);
+            _shell.Open(directory);
+        });
+        var copy = new Button { Content = "パスをコピー" };
+        copy.Click += async (_, _) =>
+        {
+            try
+            {
+                await _clipboard.SetTextAsync(directory);
+                ShowInfo("ログのフォルダのパスをコピーした。");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ログのフォルダのパスをコピーできなかった");
+                ShowError($"パスをコピーできなかった: {ex.Message}");
+            }
+        };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { open, copy } };
+        panel.Children.Add(Labeled("ログのフォルダ", "日ごとのファイルに書き込む。不具合を報告するときに使う", new StackPanel { Spacing = 6, Children = { path, buttons } }));
+
+        _page.Content = panel;
+        _status.Text = "";
+    }
+
+    /// <summary>失敗したら画面に出す。</summary>
+    private void Run(string failure, Action action)
+    {
+        try
+        {
+            action();
+            _status.Text = "";
         }
-        else
+        catch (Exception ex)
         {
-            _page.Content = new TextBlock { Text = "読み込んだプラグインはない。" };
+            _logger.LogError(ex, "{Failure}", failure);
+            ShowError($"{failure}: {ex.Message}");
         }
     }
 
@@ -465,6 +530,12 @@ public sealed class SettingsWindow : Window
             _logger.LogError(ex, "設定を書き込めなかった");
             ShowError($"設定を書き込めなかった: {ex.Message}");
         }
+    }
+
+    private void ShowInfo(string message)
+    {
+        _status.Text = message;
+        _status.Foreground = Brushes.Gray;
     }
 
     private void ShowError(string message)
