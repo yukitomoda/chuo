@@ -69,6 +69,8 @@ public class SettingsSchemaTests
     public enum Mode
     {
         Fast,
+
+        [Display(Name = "正確")]
         Accurate,
     }
 
@@ -167,6 +169,8 @@ public class SettingsSchemaTests
         var count = fields.Single(f => f.Key == "count");
         Assert.Equal((1d, 50d, (object?)8L), (count.Minimum, count.Maximum, count.DefaultValue));
         Assert.Equal(["Fast", "Accurate"], fields.Single(f => f.Key == "mode").Choices);
+        Assert.Equal(["Fast", "正確"], fields.Single(f => f.Key == "mode").ChoiceLabels);
+        Assert.Equal(1, fields.Single(f => f.Key == "mode").ChoiceIndex("accurate"));
     }
 
     [Fact]

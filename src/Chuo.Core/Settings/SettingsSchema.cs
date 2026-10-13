@@ -27,17 +27,22 @@ public enum SettingKind
 
 /// <summary>設定のクラスのプロパティ1つ分。設定画面の入力欄1つに対応する。</summary>
 /// <param name="Key">設定のセクションの中でのキー（プロパティ名の先頭を小文字にしたもの）。</param>
-/// <param name="Choices">列挙型の値の名前。</param>
+/// <param name="Choices">列挙型の値の名前。設定にはこの名前を書き込む。</param>
 /// <param name="DefaultValue">
 /// 設定のクラスを new したときの値。<see cref="SettingKind.ObjectList"/> では、要素ごとに
 /// キーと値の <see cref="Dictionary{TKey, TValue}"/> を持つ <see cref="List{T}"/>。
 /// </param>
 /// <param name="ItemFields"><see cref="SettingKind.ObjectList"/> の要素の入力欄。</param>
+/// <param name="ChoiceLabels">列挙型の値の表示名（<c>[Display(Name)]</c>、なければ名前）。<see cref="Choices"/> と同じ順。</param>
 public sealed record SettingField(
     string Key, string DisplayName, string? Description, int Order, SettingKind Kind,
     double? Minimum, double? Maximum, IReadOnlyList<string> Choices, object? DefaultValue,
-    IReadOnlyList<SettingField>? ItemFields = null)
+    IReadOnlyList<SettingField>? ItemFields = null, IReadOnlyList<string>? ChoiceLabels = null)
 {
+    /// <summary>選択肢の値の位置。大文字と小文字は区別しない（構成のバインドと同じ）。なければ -1。</summary>
+    public int ChoiceIndex(object? value) =>
+        value is string name ? Choices.ToList().FindIndex(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase)) : -1;
+
     public bool IsList => Kind is SettingKind.TextList or SettingKind.FolderList or SettingKind.FileList;
 
     /// <summary>
@@ -166,11 +171,16 @@ public static class SettingsSchema
                 Maximum: range is null ? null : Convert.ToDouble(range.Maximum, CultureInfo.InvariantCulture),
                 Choices: property.PropertyType.IsEnum ? Enum.GetNames(property.PropertyType) : [],
                 DefaultValue: itemFields is null ? Normalize(value) : NormalizeItems(value, itemFields),
-                ItemFields: itemFields?.Select(p => p.Field).ToList()), property));
+                ItemFields: itemFields?.Select(p => p.Field).ToList(),
+                ChoiceLabels: property.PropertyType.IsEnum ? ChoiceLabelsOf(property.PropertyType) : null), property));
         }
         // 並び順が同じものは、宣言の順を保つ
         return [.. fields.Select((f, i) => (f, i)).OrderBy(p => p.f.Item1.Order).ThenBy(p => p.i).Select(p => p.f)];
     }
+
+    private static IReadOnlyList<string> ChoiceLabelsOf(Type enumType) =>
+        [.. Enum.GetNames(enumType).Select(name =>
+            enumType.GetField(name)?.GetCustomAttribute<DisplayAttribute>()?.GetName() ?? name)];
 
     private static bool IsListKind(SettingKind kind) => kind is SettingKind.TextList or SettingKind.FolderList or SettingKind.FileList;
 

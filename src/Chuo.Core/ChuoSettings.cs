@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Chuo.Core;
 
 /// <summary><c>settings.json</c> のホストの設定。</summary>
@@ -12,6 +14,27 @@ public sealed class ChuoSettings
     public ImeSettings Ime { get; set; } = new();
 
     public RenderingSettings Rendering { get; set; } = new();
+
+    /// <summary><see cref="Window"/> の設定のセクション。</summary>
+    public const string WindowSection = "window";
+
+    public WindowSettings Window { get; set; } = new();
+}
+
+/// <summary>ランチャーのウィンドウの設定。設定画面の一般のページに出す。</summary>
+public sealed class WindowSettings
+{
+    [Display(Name = "表示する画面", Description = "画面が複数あるときに、ランチャーをどの画面に表示するか")]
+    public LauncherScreen Screen { get; set; } = LauncherScreen.Cursor;
+}
+
+public enum LauncherScreen
+{
+    [Display(Name = "マウスカーソルのある画面")]
+    Cursor,
+
+    [Display(Name = "メインの画面")]
+    Primary,
 }
 
 public sealed class ImeSettings

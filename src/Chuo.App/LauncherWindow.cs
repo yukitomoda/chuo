@@ -142,7 +142,7 @@ public sealed class LauncherWindow : Window
     {
         if (!IsVisible)
         {
-            MoveToCursorScreen();
+            MoveToScreen();
             Show();
             Activate();
             _integration.OnShown(_settings.CurrentValue.Ime.OffOnShow);
@@ -513,10 +513,11 @@ public sealed class LauncherWindow : Window
             return row;
         }, supportsRecycling: true);
 
-    /// <summary>マウスカーソルのあるモニタの、中央のやや上に移動する。</summary>
-    private void MoveToCursorScreen()
+    /// <summary>設定に従い、マウスカーソルのある画面かメインの画面の、中央のやや上に移動する。</summary>
+    private void MoveToScreen()
     {
-        var screen = _integration.GetCursorPosition() is var (x, y)
+        var screen = _settings.CurrentValue.Window.Screen == LauncherScreen.Cursor
+            && _integration.GetCursorPosition() is var (x, y)
             ? Screens.ScreenFromPoint(new PixelPoint(x, y))
             : null;
         screen ??= Screens.Primary;

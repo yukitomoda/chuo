@@ -113,6 +113,13 @@ public sealed class SettingsWindow : Window
         var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(new TextBlock { Text = "一般", FontSize = 22, FontWeight = FontWeight.SemiBold });
 
+        panel.Children.Add(SectionHeading("ウィンドウ"));
+        var window = _configuration.GetSection(ChuoSettings.WindowSection);
+        foreach (var field in SettingsSchema.Describe(typeof(WindowSettings)))
+        {
+            panel.Children.Add(CreateField(field, window, $"{ChuoSettings.WindowSection}:{field.Key}"));
+        }
+
         panel.Children.Add(SectionHeading("ログ"));
         var directory = ChuoPaths.LogDirectory;
         var path = new SelectableTextBlock { Text = directory, TextWrapping = TextWrapping.Wrap };
@@ -241,9 +248,8 @@ public sealed class SettingsWindow : Window
                 return Labeled(field.DisplayName, field.Description, number);
 
             case SettingKind.Choice:
-                var choice = new ComboBox { ItemsSource = field.Choices, SelectedItem = value as string, MinWidth = 200 };
-                choice.SelectionChanged += (_, _) => Write(() => _store.Set(key, field.ToJson(choice.SelectedItem as string)));
-                return Labeled(field.DisplayName, field.Description, choice);
+                return Labeled(field.DisplayName, field.Description,
+                    CreateChoice(field, value, 200, name => Write(() => _store.Set(key, field.ToJson(name)))));
 
             case SettingKind.Text or SettingKind.Folder or SettingKind.File:
                 var text = new TextBox { Text = value as string ?? "" };
@@ -322,13 +328,11 @@ public sealed class SettingsWindow : Window
                 return ItemLabeled(field, number);
 
             case SettingKind.Choice:
-                var choice = new ComboBox { ItemsSource = field.Choices, SelectedItem = value as string, MinWidth = 120 };
-                choice.SelectionChanged += (_, _) =>
+                return ItemLabeled(field, CreateChoice(field, value, 120, name =>
                 {
-                    item[field.Key] = choice.SelectedItem as string;
+                    item[field.Key] = name;
                     Write(save);
-                };
-                return ItemLabeled(field, choice);
+                }));
 
             case SettingKind.Text or SettingKind.Folder or SettingKind.File:
                 var text = new TextBox { Text = value as string ?? "", Width = 200 };
@@ -441,6 +445,25 @@ public sealed class SettingsWindow : Window
 
         Render();
         return new StackPanel { Spacing = 6, Children = { rows, addRow } };
+    }
+
+    /// <summary>選択肢。表示名を並べ、選んだ値の名前を <paramref name="changed"/> に渡す。</summary>
+    private static ComboBox CreateChoice(SettingField field, object? value, double minWidth, Action<string> changed)
+    {
+        var choice = new ComboBox
+        {
+            ItemsSource = field.ChoiceLabels ?? field.Choices,
+            SelectedIndex = field.ChoiceIndex(value),
+            MinWidth = minWidth,
+        };
+        choice.SelectionChanged += (_, _) =>
+        {
+            if (choice.SelectedIndex >= 0)
+            {
+                changed(field.Choices[choice.SelectedIndex]);
+            }
+        };
+        return choice;
     }
 
     /// <summary>リストの要素の値に、表示名を左に付ける。</summary>

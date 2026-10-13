@@ -104,7 +104,7 @@ public sealed class ShortcutsPlugin : IChuoPlugin
 | `bool` | チェックボックス |
 | `int`、`long` / `double`、`float`、`decimal` | 数値（`[Range]` で範囲を指定できる） |
 | `string` | テキスト。`[FolderPath]` / `[FilePath]` を付けると「参照…」が付く |
-| 列挙型 | 選択肢 |
+| 列挙型 | 選択肢。値に `[Display(Name)]` を付けると、その名前で表示する（設定には値の名前を書き込む） |
 | `List<string>` | 一覧と追加・削除。`[FolderPath]` / `[FilePath]` を付けると「参照…」が付く |
 | `List<T>`（T は設定のクラス） | 要素ごとに値を持つ一覧。下を参照 |
 
