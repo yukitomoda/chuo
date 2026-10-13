@@ -205,7 +205,8 @@ public sealed class LauncherWindow : Window
         }
     }
 
-    private async void OnInputChanged(int selectIndex = 0)
+    /// <param name="selectId">検索し直した後に選ぶ項目のグローバルな識別子。結果になければ <paramref name="selectIndex"/> の位置を選ぶ。</param>
+    private async void OnInputChanged(int selectIndex = 0, string? selectId = null)
     {
         _searchCancellation?.Cancel();
         _searchCancellation?.Dispose();
@@ -232,25 +233,33 @@ public sealed class LauncherWindow : Window
         }
         _results.ItemsSource = results;
         _results.IsVisible = results.Count > 0;
-        _results.SelectedIndex = results.Count > 0 ? Math.Min(selectIndex, results.Count - 1) : -1;
+        var found = selectId is null ? -1 : results.ToList().FindIndex(r => r.GlobalId == selectId);
+        _results.SelectedIndex = results.Count == 0 ? -1 : found >= 0 ? found : Math.Min(selectIndex, results.Count - 1);
+        if (_results.SelectedIndex >= 0)
+        {
+            _results.ScrollIntoView(_results.SelectedIndex);
+        }
     }
 
-    /// <summary>お気に入りや無視を変えた後に、選択の位置を保ったまま検索し直す。</summary>
-    private void Refresh() => OnInputChanged(Math.Max(0, _results.SelectedIndex));
+    /// <summary>
+    /// お気に入りや無視を変えた後に検索し直す。操作した項目の並びが変わったら、それを選び直す。
+    /// 無視して結果から消えたときは、同じ位置（次の項目）を選ぶ。
+    /// </summary>
+    private void Refresh(SearchResult changed) => OnInputChanged(Math.Max(0, _results.SelectedIndex), changed.GlobalId);
 
     private void ToggleFavorite(SearchResult result)
     {
         var favorite = !_preferences.Current.IsFavorite(result.GlobalId);
-        UpdatePreference(() => _preferences.SetFavorite(result.GlobalId, favorite));
+        UpdatePreference(result, () => _preferences.SetFavorite(result.GlobalId, favorite));
     }
 
     private void ToggleIgnored(SearchResult result)
     {
         var ignored = !_preferences.Current.IsIgnored(result.GlobalId);
-        UpdatePreference(() => _preferences.SetIgnored(result.GlobalId, ignored));
+        UpdatePreference(result, () => _preferences.SetIgnored(result.GlobalId, ignored));
     }
 
-    private void UpdatePreference(Action update)
+    private void UpdatePreference(SearchResult result, Action update)
     {
         try
         {
@@ -261,7 +270,7 @@ public sealed class LauncherWindow : Window
             _logger.LogError(ex, "項目ごとのユーザー設定を書き込めなかった");
             return;
         }
-        Refresh();
+        Refresh(result);
     }
 
     /// <summary>右クリックで、項目のアクションと、お気に入りや無視の操作のメニューを出す。</summary>
