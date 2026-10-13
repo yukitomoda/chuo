@@ -16,7 +16,8 @@
 }
 ```
 
-- `hostApi` は `HostApi.Version` のメジャーバージョンと比べる（`1.x`、`1.0`、`1` を受け付ける）。
+- `hostApi` は `HostApi.Version`（今は 1.1）と比べる。`1.x` と `1` はメジャーが同じなら、`1.1` はさらにホストのマイナーが 1 以上なら読み込む。
+- API を足したらマイナーを、互換性のない変更をしたらメジャーを上げる。1.1 では `IShell.RunAsAdministrator` と `ItemAction.Kind` を足した。
 
 ## プロバイダの宣言
 
@@ -65,7 +66,8 @@ public sealed class ClipboardPlugin : IChuoPlugin
 | `ResultItem` | `Id`、`Title`、`Subtitle`、`Icon`、`Actions`、`Preview` |
 | `CatalogItem` | `ResultItem` に検索用の `Keywords` を加えたもの |
 | `IconSource` | ファイルのアイコン（今は Windows のみ）、画像ファイル、画像のバイト列 |
-| `ItemAction` | タイトルと実行する処理。`Open`、`ShowInFolder`、`CopyText` のヘルパーがある |
+| `ItemAction` | タイトルと実行する処理。`Open`、`ShowInFolder`、`CopyText`、`RunAsAdministrator`（Windows のみ）のヘルパーがある |
+| `ItemActionKind` | 標準のアクションの種類。ホストが種類ごとにキーを割り当てる（`RunAsAdministrator` は Ctrl+Shift+Enter）。`None` のアクションは並びの位置でキーが決まる（1つめは Enter、2つめは Ctrl+Enter） |
 | `ActionResult` | 実行後の動作：閉じる（`Close`）、開いたままにする（`KeepOpen`）、入力を置き換える（`SetQuery`） |
 | `Preview` | テキスト、画像、ファイル、プロパティの一覧 |
 

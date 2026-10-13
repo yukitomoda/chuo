@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using Chuo.Abstractions;
@@ -12,4 +13,18 @@ public sealed class WindowsShell : IShell
 
     public void ShowInFolder(string path) =>
         Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { $"/select,{path}" } })?.Dispose();
+
+    /// <summary>UAC の確認でユーザーが「いいえ」を選んだ（ERROR_CANCELLED）。</summary>
+    private const int ErrorCancelled = 1223;
+
+    public void RunAsAdministrator(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, Verb = "runas" })?.Dispose();
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
+        {
+        }
+    }
 }

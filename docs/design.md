@@ -127,6 +127,7 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 - Windows
   - 対象はユーザーと全ユーザーのスタートメニューの `.lnk` と `.url`。
   - `.lnk` は COM を使わずにファイルの形式（MS-SHLLINK）を直接読み、リンク先のパスを得る。リンク先は、サブタイトルと「ファイルの場所を開く」、実行ファイルの名前での検索に使う。
+  - 管理者としての実行は、`ShellExecute` の `runas` で行う。対象は実行ファイル（`.exe`、`.bat`、`.cmd`、`.com`、`.msc`）と、それを指すかリンク先の読めない `.lnk` とし、`.url` は対象にしない。UAC の確認を取り消したときは何もしない。キーは Windows の慣習（スタートメニューや「ファイル名を指定して実行」）に合わせて Ctrl+Shift+Enter とし、ホストがアクションの種類（`ItemActionKind`）で割り当てる。
   - アイコンはホストが `IShellItemImageFactory` で取得する。シェルの COM オブジェクトを安全に使うため、STA の専用スレッドで処理する。
 - Linux
   - XDG のデータフォルダの `applications/` を優先度の順に読み、同じデスクトップファイル ID は優先度の高いものだけを使う。`NoDisplay`、`Hidden`、`OnlyShowIn` / `NotShowIn`、`TryExec` に従って除外する。

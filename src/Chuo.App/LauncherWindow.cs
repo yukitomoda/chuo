@@ -287,7 +287,8 @@ public sealed class LauncherWindow : Window
         for (var i = 0; i < result.Item.Actions.Count; i++)
         {
             var index = i;
-            menuItems.Add(MenuItemFor(result.Item.Actions[i].Title, ActionGesture(i), () => ExecuteSelected(index)));
+            var action = result.Item.Actions[i];
+            menuItems.Add(MenuItemFor(action.Title, ActionGesture(action, i), () => ExecuteSelected(index)));
         }
         if (menuItems.Count > 0)
         {
@@ -326,10 +327,11 @@ public sealed class LauncherWindow : Window
     }
 
     /// <summary>アクションに割り当てたキー（<see cref="OnPreviewKeyDown"/> と合わせる）。</summary>
-    private static string? ActionGesture(int index) => index switch
+    private static string? ActionGesture(ItemAction action, int index) => (action.Kind, index) switch
     {
-        0 => "Enter",
-        1 => "Ctrl+Enter",
+        (ItemActionKind.RunAsAdministrator, _) => "Ctrl+Shift+Enter",
+        (_, 0) => "Enter",
+        (_, 1) => "Ctrl+Enter",
         _ => null,
     };
 
@@ -345,6 +347,10 @@ public sealed class LauncherWindow : Window
                 break;
             case Key.Up:
                 MoveSelection(-1);
+                break;
+            case Key.Enter when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
+                // Windows の慣習（スタートメニューやファイル名を指定して実行）に合わせる
+                ExecuteSelected(ItemActionKind.RunAsAdministrator);
                 break;
             case Key.Enter:
                 // 2つめ以降のアクションは修飾キーに割り当てる（要件定義書 5.2）
@@ -382,6 +388,16 @@ public sealed class LauncherWindow : Window
         }
         _results.SelectedIndex = (_results.SelectedIndex + delta + count) % count;
         _results.ScrollIntoView(_results.SelectedIndex);
+    }
+
+    /// <summary>選んでいる項目の、指定した種類のアクションを実行する。なければ何もしない。</summary>
+    private void ExecuteSelected(ItemActionKind kind)
+    {
+        if (_results.SelectedItem is SearchResult result
+            && result.Item.Actions.ToList().FindIndex(a => a.Kind == kind) is var index and >= 0)
+        {
+            ExecuteSelected(index);
+        }
     }
 
     private async void ExecuteSelected(int actionIndex)

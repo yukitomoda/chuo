@@ -10,4 +10,6 @@ public sealed class LinuxShell : IShell
 
     // TODO: org.freedesktop.FileManager1.ShowItems で、ファイルを選択した状態で開く
     public void ShowInFolder(string path) => Open(Path.GetDirectoryName(path) ?? path);
+
+    public void RunAsAdministrator(string path) => throw new NotSupportedException("管理者としての実行は Windows のみ");
 }

@@ -40,6 +40,16 @@ internal sealed class StartMenuSource : IAppSource
             keywords.Add(fileName);
         }
 
+        List<ItemAction> actions =
+        [
+            ItemAction.Open(path, "起動"),
+            ItemAction.ShowInFolder(target is not null && File.Exists(target) ? target : path, "ファイルの場所を開く"),
+        ];
+        if (Elevation.CanRunAsAdministrator(path, target))
+        {
+            actions.Add(ItemAction.RunAsAdministrator(path));
+        }
+
         return new CatalogItem
         {
             Id = path,
@@ -47,11 +57,7 @@ internal sealed class StartMenuSource : IAppSource
             Subtitle = target ?? path,
             Icon = IconSource.FromFile(path),
             Keywords = keywords,
-            Actions =
-            [
-                ItemAction.Open(path, "起動"),
-                ItemAction.ShowInFolder(target is not null && File.Exists(target) ? target : path, "ファイルの場所を開く"),
-            ],
+            Actions = actions,
         };
     }
 }

@@ -8,6 +8,12 @@ public interface IShell
 
     /// <summary>ファイルやフォルダを、それを含むフォルダで表示する。</summary>
     void ShowInFolder(string path);
+
+    /// <summary>
+    /// 管理者として実行する（Windows のみ。ほかの OS では <see cref="NotSupportedException"/>）。
+    /// ユーザーが UAC の確認を取り消したときは、何もせずに戻る。
+    /// </summary>
+    void RunAsAdministrator(string path);
 }
 
 /// <summary>クリップボード。プラグインはコンストラクタで受け取れる。</summary>

@@ -3,6 +3,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\ShellLink.cs" Link="Shared\ShellLink.cs" />
     <Compile Include="..\Shared\DesktopEntry.cs" Link="Shared\DesktopEntry.cs" />
+    <Compile Include="..\Shared\Elevation.cs" Link="Shared\Elevation.cs" />
   </ItemGroup>
 
 </Project>

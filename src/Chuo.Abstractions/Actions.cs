@@ -5,6 +5,13 @@ namespace Chuo.Abstractions;
 /// <param name="Execute">実行する処理。実行後のランチャーの振る舞いを返す。</param>
 public sealed record ItemAction(string Title, Func<ActionContext, ValueTask<ActionResult>> Execute)
 {
+    /// <summary>標準のアクションの種類。ホストは種類ごとに決まったキーを割り当てる。</summary>
+    public ItemActionKind Kind { get; init; }
+
+    /// <summary>管理者として実行する（Windows のみ）。キーは Ctrl+Shift+Enter。</summary>
+    public static ItemAction RunAsAdministrator(string path, string title = "管理者として実行") =>
+        new(title, ctx => Close(() => ctx.Shell.RunAsAdministrator(path))) { Kind = ItemActionKind.RunAsAdministrator };
+
     /// <summary>ファイルや URL を既定のアプリで開く。</summary>
     public static ItemAction Open(string target, string title = "開く") =>
         new(title, ctx => Close(() => ctx.Shell.Open(target)));
@@ -26,6 +33,16 @@ public sealed record ItemAction(string Title, Func<ActionContext, ValueTask<Acti
         action();
         return ValueTask.FromResult(ActionResult.Close);
     }
+}
+
+/// <summary>標準のアクションの種類。</summary>
+public enum ItemActionKind
+{
+    /// <summary>種類を持たないアクション。キーは並びの位置で決まる（1つめは Enter、2つめは Ctrl+Enter）。</summary>
+    None,
+
+    /// <summary>管理者として実行する。キーは Ctrl+Shift+Enter。</summary>
+    RunAsAdministrator,
 }
 
 /// <summary>アクションの実行時に渡される情報。</summary>
