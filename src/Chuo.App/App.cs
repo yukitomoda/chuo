@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 using Chuo.Core;
@@ -62,6 +64,7 @@ public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) 
 
         var settingsLauncher = services.GetRequiredService<SettingsLauncher>();
         settingsLauncher.Closed += window.TrimMemoryIfEnabled;
+        AddTrayIcon(window, settingsLauncher, desktop, logger);
         if (showOnStart)
         {
             window.ShowLauncher();
@@ -73,6 +76,43 @@ public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) 
         else
         {
             window.TrimMemoryIfEnabled();
+        }
+    }
+
+    /// <summary>
+    /// タスクトレイ（通知領域）にアイコンを出す（要件定義書 4 章）。クリックでランチャーを開き、右クリックのメニューから設定画面と終了を選べる。
+    /// トレイのない環境（拡張のない GNOME など）では表示されないだけで、ほかの動作には影響しない。
+    /// </summary>
+    private void AddTrayIcon(LauncherWindow window, SettingsLauncher settingsLauncher, IClassicDesktopStyleApplicationLifetime desktop, ILogger logger)
+    {
+        try
+        {
+            NativeMenuItem Item(string header, Action action)
+            {
+                var item = new NativeMenuItem(header);
+                item.Click += (_, _) => action();
+                return item;
+            }
+
+            using var icon = AssetLoader.Open(new Uri("avares://chuo/Assets/chuo.png"));
+            var tray = new TrayIcon
+            {
+                Icon = new WindowIcon(icon),
+                ToolTipText = "chuo",
+                Menu =
+                [
+                    Item("ランチャーを開く", () => window.ShowLauncher()),
+                    Item("設定", settingsLauncher.Open),
+                    new NativeMenuItemSeparator(),
+                    Item("終了", () => desktop.Shutdown()),
+                ],
+            };
+            tray.Clicked += (_, _) => window.ShowLauncher();
+            TrayIcon.SetIcons(this, [tray]);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "タスクトレイにアイコンを出せなかった");
         }
     }
 
