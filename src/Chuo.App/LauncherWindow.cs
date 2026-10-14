@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
@@ -368,10 +367,6 @@ public sealed class LauncherWindow : Window
                 // 設定画面を開く（要件定義書 9.1）
                 HideLauncher();
                 _settingsLauncher.Open();
-                break;
-            case Key.Q when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
-                // TODO: 終了の操作は、設定画面やシステムのコマンドを作るまでの仮のもの
-                (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
                 break;
             default:
                 return;
