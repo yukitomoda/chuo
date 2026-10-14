@@ -62,6 +62,24 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal("2", configuration["a:c"]);
         Assert.Null(configuration["x"]);
     }
+
+    [Fact]
+    public void キーを削除して空になった親も削除する()
+    {
+        var store = new SettingsStore(SettingsFile);
+        store.Set("plugins:chuo.calculator:enabled", JsonValue.Create(false));
+        store.Set("plugins:chuo.apps:enabled", JsonValue.Create(false));
+
+        store.Set("plugins:chuo.calculator:enabled", null);
+
+        var root = JsonNode.Parse(File.ReadAllText(SettingsFile))!.AsObject();
+        var plugins = root["plugins"]!.AsObject();
+        Assert.False(plugins.ContainsKey("chuo.calculator"));
+        Assert.True(plugins.ContainsKey("chuo.apps"));
+
+        store.Set("plugins:chuo.apps:enabled", null);
+        Assert.Empty(JsonNode.Parse(File.ReadAllText(SettingsFile))!.AsObject());
+    }
 }
 
 public class SettingsSchemaTests

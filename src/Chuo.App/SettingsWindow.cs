@@ -32,6 +32,7 @@ public sealed class SettingsWindow : Window
     private readonly IShell _shell;
     private readonly IClipboard _clipboard;
     private readonly ILogger _logger;
+    private readonly ListBox _pluginList;
     private readonly ContentControl _page = new();
     private readonly TextBlock _status = new() { Margin = new Thickness(16, 8), TextWrapping = TextWrapping.Wrap };
 
@@ -50,11 +51,16 @@ public sealed class SettingsWindow : Window
         Height = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-        var pluginList = new ListBox
+        var pluginList = _pluginList = new ListBox
         {
-            ItemsSource = plugins.Plugins.OrderBy(p => p.Name, StringComparer.CurrentCulture).ToList(),
+            ItemsSource = SortedPlugins(),
             ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<PluginInfo>((p, _) =>
-                new TextBlock { Text = p?.Name, Margin = new Thickness(4, 2) }),
+                new TextBlock
+                {
+                    Text = p is { IsEnabled: false } ? $"{p.Name}（無効）" : p?.Name,
+                    Opacity = p is { IsEnabled: false } ? 0.6 : 1,
+                    Margin = new Thickness(4, 2),
+                }),
         };
         // 本体のページとプラグインの一覧は別の ListBox にし、片方を選んだらもう片方の選択を外す
         var generalList = new ListBox { ItemsSource = new[] { "一般" } };
@@ -105,6 +111,25 @@ public sealed class SettingsWindow : Window
         };
 
         generalList.SelectedIndex = 0;
+
+        // 有効と無効を切り替えると、プラグインの読み込みかアンロードが済んでから一覧とページを作り直す
+        Action changed = () => Dispatcher.UIThread.Post(RefreshPlugins);
+        plugins.PluginsChanged += changed;
+        Closed += (_, _) => plugins.PluginsChanged -= changed;
+    }
+
+    private List<PluginInfo> SortedPlugins() => [.. _plugins.Plugins.OrderBy(p => p.Name, StringComparer.CurrentCulture)];
+
+    /// <summary>プラグインの一覧を作り直す。プラグインのページを開いていれば、選び直して作り直す。</summary>
+    private void RefreshPlugins()
+    {
+        var selectedId = (_pluginList.SelectedItem as PluginInfo)?.Id;
+        var plugins = SortedPlugins();
+        _pluginList.ItemsSource = plugins;
+        if (selectedId is not null)
+        {
+            _pluginList.SelectedIndex = plugins.FindIndex(p => p.Id == selectedId);
+        }
     }
 
     /// <summary>一般のページ。TODO: ホットキー、自動起動、テーマ、表示位置、最大表示件数、IME（要件定義書 9.1）。</summary>
@@ -170,6 +195,28 @@ public sealed class SettingsWindow : Window
         var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(new TextBlock { Text = plugin.Name, FontSize = 22, FontWeight = FontWeight.SemiBold });
         panel.Children.Add(Caption($"{plugin.Id}  バージョン {plugin.Version}"));
+
+        var enabledKey = PluginManager.EnabledKey(plugin.Id);
+        var enabled = new CheckBox { Content = "このプラグインを使う", IsChecked = plugin.IsEnabled };
+        // 有効は既定なので、キーを消して書き込む
+        enabled.IsCheckedChanged += (_, _) => Write(() => _store.Set(enabledKey, enabled.IsChecked == true ? null : JsonValue.Create(false)));
+        panel.Children.Add(Labeled(null, "オフにすると、プラグインを読み込まず、検索にも出さない", enabled));
+
+        if (!plugin.IsEnabled)
+        {
+            _page.Content = panel;
+            _status.Text = "";
+            return;
+        }
+        if (plugin.LoadError is { } error)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"読み込めなかった: {error}",
+                Foreground = Brushes.IndianRed,
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
 
         foreach (var provider in plugin.Providers)
         {

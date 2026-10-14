@@ -26,6 +26,7 @@ public sealed class SettingsStore(string path)
         {
             var root = JsonFile.ReadObject(path, NodeOptions);
             var parent = root;
+            var ancestors = new List<(JsonObject Parent, string Name, JsonObject Child)>();
             foreach (var segment in segments[..^1])
             {
                 if (parent[segment] is not JsonObject child)
@@ -37,12 +38,22 @@ public sealed class SettingsStore(string path)
                     child = new JsonObject(NodeOptions);
                     SetProperty(parent, segment, child);
                 }
+                ancestors.Add((parent, segment, child));
                 parent = child;
             }
 
             if (value is null)
             {
                 RemoveProperty(parent, segments[^1]);
+                // 空になった親も消す（例: plugins:<id>:enabled を消したら、空の plugins:<id> も消す）
+                foreach (var (ancestor, name, child) in Enumerable.Reverse(ancestors))
+                {
+                    if (child.Count > 0)
+                    {
+                        break;
+                    }
+                    RemoveProperty(ancestor, name);
+                }
             }
             else
             {

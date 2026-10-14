@@ -60,6 +60,51 @@ public class PluginLoadingTests
         return weak;
     }
 
+    [Fact]
+    public async Task 無効にしたプラグインは読み込まず_有効にすると読み込む()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var registry = new ProviderRegistry();
+        var options = Options.Create(new PluginManagerOptions());
+        options.Value.BundledDirectories.Add(PluginsDirectory);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [PluginManager.EnabledKey("chuo.calculator")] = "false" })
+            .Build();
+        var manager = new PluginManager(
+            registry, new ServiceCollection().BuildServiceProvider(), configuration, options, NullLogger<PluginManager>.Instance);
+
+        await manager.StartAsync(cancellationToken);
+        try
+        {
+            var disabled = Assert.Single(manager.Plugins, p => p.Id == "chuo.calculator");
+            Assert.False(disabled.IsEnabled);
+            Assert.Empty(disabled.Providers);
+            Assert.DoesNotContain(registry.LiveQueries, q => q.PluginId == "chuo.calculator");
+
+            var changed = new TaskCompletionSource();
+            manager.PluginsChanged += () => changed.TrySetResult();
+            configuration[PluginManager.EnabledKey("chuo.calculator")] = "true";
+            configuration.Reload();
+            await changed.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+
+            var enabled = Assert.Single(manager.Plugins, p => p.Id == "chuo.calculator");
+            Assert.True(enabled.IsEnabled);
+            Assert.Contains(registry.LiveQueries, q => q.PluginId == "chuo.calculator");
+
+            changed = new TaskCompletionSource();
+            configuration[PluginManager.EnabledKey("chuo.calculator")] = "false";
+            configuration.Reload();
+            await changed.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+
+            Assert.False(Assert.Single(manager.Plugins, p => p.Id == "chuo.calculator").IsEnabled);
+            Assert.DoesNotContain(registry.LiveQueries, q => q.PluginId == "chuo.calculator");
+        }
+        finally
+        {
+            await manager.StopAsync(cancellationToken);
+        }
+    }
+
     private sealed class StaticSettings : IOptionsMonitor<ChuoSettings>
     {
         public ChuoSettings CurrentValue { get; } = new();

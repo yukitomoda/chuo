@@ -19,10 +19,14 @@ internal sealed class PluginInstance
 
     private readonly PluginLoadContext _loadContext;
     private readonly IHost _host;
+    private readonly CancellationTokenSource _stopping = new();
 
     public PluginManifest Manifest { get; }
 
     public string Directory { get; }
+
+    /// <summary>アンロードを始めるとキャンセルされる。カタログの初期化などに渡す。</summary>
+    public CancellationToken Stopping => _stopping.Token;
 
     /// <summary>カタログ型のプロバイダと、その項目の登録先。</summary>
     public IReadOnlyList<(CatalogRegistration Registration, ICatalogProvider Provider)> Catalogs { get; private set; }
@@ -123,6 +127,7 @@ internal sealed class PluginInstance
     {
         try
         {
+            await _stopping.CancelAsync();
             await _host.StopAsync(cancellationToken);
         }
         finally

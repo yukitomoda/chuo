@@ -37,6 +37,8 @@
 - 常駐処理は `IHostedService` / `BackgroundService` で書く。
 - 本体のサービスは、プラグインのホストにインスタンスを中継して登録する。
 - アンロードは `StopAsync()`、`Dispose()`、`ALC.Unload()` の順に行う。
+- 起動時はすべてのプラグインの `plugin.json` を読み、有効なものだけを読み込む。無効なものはコードを読み込まず、設定画面の一覧に名前とバージョンだけを出す。
+- 有効と無効は `settings.json` の `plugins.<id>.enabled` に書く（値がなければ有効）。構成の再読み込みのたびに、前に反映した値と比べ、変わったプラグインだけを読み込むかアンロードする（読み込みに失敗したものを、設定を書き込むたびに読み直さないため）。
 - プラグインの設定は `settings.json` の `plugins.<id>` のセクションを `IConfiguration` として渡し、`IOptionsMonitor<T>` で即座に反映する。
 
 ### 2.1 メタデータ
@@ -188,6 +190,7 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 | ログ | `logs/` | アプリが書き込む。日ごとにファイルを切り替え、プラグインごとにカテゴリを分ける |
 
 - アプリが設定ファイルを書き込むときは、一時ファイルに書いてから置き換える。
+- 設定のキーを消したときは、空になった親のオブジェクトも消す。
 - 設定画面での変更は `settings.json` に書き込み、構成の再読み込み（`reloadOnChange`）を通じて `IOptionsMonitor` で本体とプラグインに反映する。自分の書き込みでも再読み込みが走るが、反映の経路を1つにするため、それでよいとする。
 - `settings.json` のプラグインの部分は次の形にする。キーの大文字と小文字は区別しない。
 
@@ -195,6 +198,7 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 {
   "plugins": {
     "chuo.shortcuts": {
+      "enabled": true,
       "settings": { "folders": [{ "path": "C:\\Users\\me\\Tools", "includeSubfolders": true }] },
       "providers": { "ShortcutCatalogProvider": { "keyword": "l", "includeInGlobal": false } }
     }
@@ -202,6 +206,7 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 }
 ```
 
+  - `enabled`：プラグインを有効にするか。値がなければ有効。
   - `settings`：プラグインの設定。プラグインに `IConfiguration` として渡す。
   - `providers`：プロバイダごとのキーワードと全体検索に含めるかの上書き。値がなければ、プロバイダの属性の値を使う。キーワードを空文字列にすると、キーワードなしになる。
 
