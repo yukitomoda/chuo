@@ -32,11 +32,15 @@ public sealed class AppCatalogProvider(ILogger<AppCatalogProvider> logger) : ICa
         Rescan();
 
         _rescanTimer = new Timer(_ => Rescan());
-        foreach (var root in _source.Roots.Where(Directory.Exists))
+        foreach (var root in _source.Roots.Where(r => Directory.Exists(r.Path)))
         {
             try
             {
-                var watcher = new FileSystemWatcher(root) { IncludeSubdirectories = true };
+                var watcher = new FileSystemWatcher(root.Path) { IncludeSubdirectories = root.IncludeSubdirectories };
+                if (!root.IncludeSubdirectories)
+                {
+                    watcher.NotifyFilter = NotifyFilters.DirectoryName;
+                }
                 watcher.Created += OnChanged;
                 watcher.Deleted += OnChanged;
                 watcher.Renamed += OnChanged;
@@ -46,7 +50,7 @@ public sealed class AppCatalogProvider(ILogger<AppCatalogProvider> logger) : ICa
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
             {
-                logger.LogWarning(ex, "フォルダの変更を監視できない: {Root}", root);
+                logger.LogWarning(ex, "フォルダの変更を監視できない: {Root}", root.Path);
             }
         }
         return Task.CompletedTask;

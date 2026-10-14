@@ -1,26 +1,40 @@
 using Chuo.Abstractions;
+using System.Runtime.Versioning;
 using Chuo.Plugins.Shared;
 
 namespace Chuo.Plugins.Apps;
 
-/// <summary>Windows のスタートメニューのショートカット（.lnk と .url）からアプリを列挙する（設計 4.5）。</summary>
+/// <summary>
+/// Windows のスタートメニューのアプリを列挙する（設計 4.5）。
+/// ショートカット（.lnk と .url）と、ショートカットを持たないパッケージのアプリ（Microsoft Store のアプリなど）。
+/// </summary>
+[SupportedOSPlatform("windows")]
 internal sealed class StartMenuSource : IAppSource
 {
     private static readonly EnumerationOptions Enumeration = new() { RecurseSubdirectories = true, IgnoreInaccessible = true };
 
-    public IReadOnlyList<string> Roots { get; } =
+    private readonly IReadOnlyList<string> _shortcutRoots =
         new[] { Environment.SpecialFolder.Programs, Environment.SpecialFolder.CommonPrograms }
             .Select(Environment.GetFolderPath)
             .Where(path => path.Length > 0)
             .ToList();
 
+    public IReadOnlyList<WatchedFolder> Roots =>
+    [
+        .. _shortcutRoots.Select(root => new WatchedFolder(root)),
+        // パッケージをユーザーに登録すると、ここにパッケージのフォルダができる。中はアプリのデータなので直下だけを監視する
+        new WatchedFolder(PackagedApps.DataRoot, IncludeSubdirectories: false),
+    ];
+
     public IReadOnlyList<CatalogItem> Scan() =>
-        Roots
+    [
+        .. _shortcutRoots
             .Where(Directory.Exists)
             .SelectMany(root => Directory.EnumerateFiles(root, "*", Enumeration))
             .Where(IsShortcut)
-            .Select(CreateItem)
-            .ToList();
+            .Select(CreateItem),
+        .. PackagedApps.Enumerate().Select(CreatePackagedItem),
+    ];
 
     public static bool IsShortcut(string path) =>
         Path.GetExtension(path).ToLowerInvariant() is ".lnk" or ".url";
@@ -58,6 +72,19 @@ internal sealed class StartMenuSource : IAppSource
             Icon = IconSource.FromFile(path),
             Keywords = keywords,
             Actions = actions,
+        };
+    }
+
+    private static CatalogItem CreatePackagedItem(PackagedApp app)
+    {
+        var location = PackagedApps.ShellPath(app.AppUserModelId);
+        return new CatalogItem
+        {
+            Id = app.AppUserModelId,
+            Title = app.Name,
+            Subtitle = app.PackageName,
+            Icon = IconSource.FromFile(location),
+            Actions = [ItemAction.Open(location, "起動")],
         };
     }
 }

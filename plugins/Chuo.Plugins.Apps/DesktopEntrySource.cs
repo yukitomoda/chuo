@@ -16,13 +16,13 @@ internal sealed class DesktopEntrySource : IAppSource
     private readonly IconThemeLookup _icons = new(DataDirectories());
 
     /// <summary>優先度の高い順。同じ ID の .desktop が複数あれば、先にあるものを使う。</summary>
-    public IReadOnlyList<string> Roots { get; } = DataDirectories().Select(d => Path.Combine(d, "applications")).ToList();
+    public IReadOnlyList<WatchedFolder> Roots { get; } = DataDirectories().Select(d => new WatchedFolder(Path.Combine(d, "applications"))).ToList();
 
     public IReadOnlyList<CatalogItem> Scan()
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var items = new List<CatalogItem>();
-        foreach (var root in Roots.Where(Directory.Exists))
+        foreach (var root in Roots.Select(r => r.Path).Where(Directory.Exists))
         {
             foreach (var path in Directory.EnumerateFiles(root, "*.desktop", Enumeration))
             {

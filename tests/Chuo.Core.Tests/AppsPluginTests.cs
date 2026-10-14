@@ -231,3 +231,20 @@ public class DesktopExecTests
     public void 実行できない値は_null(string exec) =>
         Assert.Null(DesktopExec.Parse(exec, "App", null, "/a/app.desktop"));
 }
+
+public class PackagedAppsTests
+{
+    [Theory]
+    [InlineData("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", "Microsoft.WindowsCalculator")]
+    [InlineData("windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel", "windows.immersivecontrolpanel")]
+    public void パッケージのアプリの_AppUserModelID_からパッケージの名前を得る(string id, string expected) =>
+        Assert.Equal(expected, Chuo.Plugins.Apps.PackagedApps.GetPackageName(id));
+
+    [Theory]
+    [InlineData("Microsoft.Windows.Explorer")]
+    [InlineData(@"{6D809377-6AF0-444B-8957-A3773F02200E}\Microsoft VS Code\Code.exe")]
+    [InlineData("Chrome")]
+    [InlineData("Microsoft.Office.WINWORD.EXE.15")]
+    public void ショートカットのアプリは対象にしない(string id) =>
+        Assert.Null(Chuo.Plugins.Apps.PackagedApps.GetPackageName(id));
+}

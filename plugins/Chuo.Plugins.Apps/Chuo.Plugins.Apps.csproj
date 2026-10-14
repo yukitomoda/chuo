@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <!-- シェルの COM インターフェイスを vtable で直接呼ぶ（PackagedApps） -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="..\Shared\ShellLink.cs" Link="Shared\ShellLink.cs" />
     <Compile Include="..\Shared\DesktopEntry.cs" Link="Shared\DesktopEntry.cs" />

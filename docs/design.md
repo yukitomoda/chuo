@@ -122,12 +122,14 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 
 ### 4.5 アプリの列挙
 
-- Windows はスタートメニューの `.lnk`、Linux は `.desktop` からアプリを列挙し、アイコンも取得する。
+- Windows はスタートメニューの `.lnk` とパッケージのアプリ、Linux は `.desktop` からアプリを列挙し、アイコンも取得する。
 - アプリを置いているフォルダの変更を `FileSystemWatcher` で監視し、変更が落ち着いてから（2秒後に）一覧を作り直す。
 - Windows
   - 対象はユーザーと全ユーザーのスタートメニューの `.lnk` と `.url`。
   - `.lnk` は COM を使わずにファイルの形式（MS-SHLLINK）を直接読み、リンク先のパスを得る。リンク先は、サブタイトルと「ファイルの場所を開く」、実行ファイルの名前での検索に使う。
   - 管理者としての実行は、`ShellExecute` の `runas` で行う。対象は実行ファイル（`.exe`、`.bat`、`.cmd`、`.com`、`.msc`）と、それを指すかリンク先の読めない `.lnk` とし、`.url` は対象にしない。UAC の確認を取り消したときは何もしない。キーは Windows の慣習（スタートメニューや「ファイル名を指定して実行」）に合わせて Ctrl+Shift+Enter とし、ホストがアクションの種類（`ItemActionKind`）で割り当てる。
+  - パッケージのアプリ（Microsoft Store のアプリなど、`.lnk` を持たないもの）は、シェルの「アプリ」フォルダ（`shell:AppsFolder`）を `IShellItem` で列挙して得る。このフォルダには `.lnk` のあるアプリも並ぶので、AppUserModelID がパッケージの形（`<パッケージ名>_<発行元の ID>!<アプリの ID>`）のものだけを使う。項目の ID は AppUserModelID とし、起動とアイコンの取得には `shell:AppsFolder\<AppUserModelID>` を使う。管理者としての実行と「ファイルの場所を開く」は対象にしない。
+  - パッケージの追加と削除は、`%LOCALAPPDATA%\Packages` の直下のフォルダの追加と削除で検知する（パッケージをユーザーに登録すると、パッケージごとのデータのフォルダができる）。中はアプリのデータで頻繁に変わるので、サブフォルダは監視しない。
   - アイコンはホストが `IShellItemImageFactory` で取得する。シェルの COM オブジェクトを安全に使うため、STA の専用スレッドで処理する。
 - Linux
   - XDG のデータフォルダの `applications/` を優先度の順に読み、同じデスクトップファイル ID は優先度の高いものだけを使う。`NoDisplay`、`Hidden`、`OnlyShowIn` / `NotShowIn`、`TryExec` に従って除外する。
