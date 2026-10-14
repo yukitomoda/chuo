@@ -248,3 +248,47 @@ public class PackagedAppsTests
     public void ショートカットのアプリは対象にしない(string id) =>
         Assert.Null(Chuo.Plugins.Apps.PackagedApps.GetPackageName(id));
 }
+
+public class ShortcutDeduplicationTests
+{
+    [Fact]
+    public void リンク先と引数が同じショートカットは先のものだけを残す()
+    {
+        var shortcuts = new (string, ShellLinkInfo?)[]
+        {
+            (@"C:\Users\me\Start Menu\Tailscale.lnk", new(@"C:\Program Files\Tailscale\tailscale-ipn.exe", null)),
+            (@"C:\ProgramData\Start Menu\Tailscale.lnk", new(@"c:\program files\tailscale\tailscale-ipn.exe", null)),
+        };
+
+        var result = Chuo.Plugins.Apps.ShortcutDeduplication.Distinct(shortcuts).ToList();
+
+        Assert.Equal(@"C:\Users\me\Start Menu\Tailscale.lnk", Assert.Single(result).Path);
+    }
+
+    [Fact]
+    public void 引数が違えば別々に残す()
+    {
+        var shortcuts = new (string, ShellLinkInfo?)[]
+        {
+            ("Work.lnk", new(@"C:\chrome.exe", "--profile-directory=Default")),
+            ("Personal.lnk", new(@"C:\chrome.exe", "--profile-directory=\"Profile 1\"")),
+            ("Chrome.lnk", new(@"C:\chrome.exe", null)),
+        };
+
+        Assert.Equal(3, Chuo.Plugins.Apps.ShortcutDeduplication.Distinct(shortcuts).Count());
+    }
+
+    [Fact]
+    public void リンク先の読めないショートカットと_url_はまとめない()
+    {
+        var shortcuts = new (string, ShellLinkInfo?)[]
+        {
+            ("Word.lnk", new(null, null)),
+            ("Word.lnk", new(null, null)),
+            ("Site.url", null),
+            ("Site.url", null),
+        };
+
+        Assert.Equal(4, Chuo.Plugins.Apps.ShortcutDeduplication.Distinct(shortcuts).Count());
+    }
+}

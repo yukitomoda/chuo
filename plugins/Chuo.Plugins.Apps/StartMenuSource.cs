@@ -13,6 +13,7 @@ internal sealed class StartMenuSource : IAppSource
 {
     private static readonly EnumerationOptions Enumeration = new() { RecurseSubdirectories = true, IgnoreInaccessible = true };
 
+    /// <summary>ユーザーのものを優先するので、ユーザーのスタートメニューを先に並べる。</summary>
     private readonly IReadOnlyList<string> _shortcutRoots =
         new[] { Environment.SpecialFolder.Programs, Environment.SpecialFolder.CommonPrograms }
             .Select(Environment.GetFolderPath)
@@ -28,23 +29,25 @@ internal sealed class StartMenuSource : IAppSource
 
     public IReadOnlyList<CatalogItem> Scan() =>
     [
-        .. _shortcutRoots
-            .Where(Directory.Exists)
-            .SelectMany(root => Directory.EnumerateFiles(root, "*", Enumeration))
-            .Where(IsShortcut)
-            .Select(CreateItem),
+        .. ShortcutDeduplication.Distinct(
+                _shortcutRoots
+                    .Where(Directory.Exists)
+                    .SelectMany(root => Directory.EnumerateFiles(root, "*", Enumeration))
+                    .Where(IsShortcut)
+                    .Select(path => (path, IsLink(path) ? ShellLink.TryRead(path) : null)))
+            .Select(shortcut => CreateItem(shortcut.Path, shortcut.Link)),
         .. PackagedApps.Enumerate().Select(CreatePackagedItem),
     ];
 
     public static bool IsShortcut(string path) =>
         Path.GetExtension(path).ToLowerInvariant() is ".lnk" or ".url";
 
-    private static CatalogItem CreateItem(string path)
+    private static bool IsLink(string path) => Path.GetExtension(path).Equals(".lnk", StringComparison.OrdinalIgnoreCase);
+
+    private static CatalogItem CreateItem(string path, ShellLinkInfo? link)
     {
         var title = Path.GetFileNameWithoutExtension(path);
-        var target = Path.GetExtension(path).Equals(".lnk", StringComparison.OrdinalIgnoreCase)
-            ? ShellLink.TryRead(path)?.TargetPath
-            : null;
+        var target = link?.TargetPath;
 
         // 実行ファイルの名前（例: Visual Studio Code の code）でも見つかるようにする
         var keywords = new List<string>();
@@ -86,5 +89,29 @@ internal sealed class StartMenuSource : IAppSource
             Icon = IconSource.FromFile(location),
             Actions = [ItemAction.Open(location, "起動")],
         };
+    }
+}
+
+/// <summary>
+/// 同じアプリを指すショートカットを1つにまとめる（設計 4.5）。ユーザーと全ユーザーのスタートメニューの両方に
+/// 同じショートカットがあると、同じアプリが2件出るため。
+/// </summary>
+internal static class ShortcutDeduplication
+{
+    /// <summary>
+    /// リンク先と引数が同じショートカットは、先にあるものだけを残す。
+    /// リンク先の読めないショートカットと .url は、何を開くか分からないのでまとめない。
+    /// </summary>
+    public static IEnumerable<(string Path, ShellLinkInfo? Link)> Distinct(IEnumerable<(string Path, ShellLinkInfo? Link)> shortcuts)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var shortcut in shortcuts)
+        {
+            if (shortcut.Link is { TargetPath: { } target } link && !seen.Add(target + "\0" + link.Arguments))
+            {
+                continue;
+            }
+            yield return shortcut;
+        }
     }
 }
