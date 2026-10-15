@@ -103,6 +103,16 @@ public sealed class SearchWithPreferencesTests : IDisposable
         [.. (await _search.SearchAsync(text, TestContext.Current.CancellationToken)).Select(r => r.Item.Title)];
 
     [Fact]
+    public void グローバルな識別子から項目を探し_なければ識別子を名前にする()
+    {
+        var found = _search.Resolve("apps:Firefox");
+        Assert.Equal(("Firefox", "apps", "apps:Firefox"), (found.Item.Title, found.PluginId, found.GlobalId));
+
+        var missing = _search.Resolve("old:gone");
+        Assert.Equal(("old:gone", "old", "old:gone"), (missing.Item.Title, missing.PluginId, missing.GlobalId));
+    }
+
+    [Fact]
     public async Task お気に入りを上に出す()
     {
         Assert.Equal("Firefox", (await SearchAsync("fire"))[0]);

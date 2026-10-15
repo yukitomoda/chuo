@@ -92,7 +92,7 @@ public sealed class SearchService(
         var results = new List<SearchResult>();
         foreach (var id in preference.Ignored.Order(StringComparer.Ordinal))
         {
-            var result = Find(id) ?? Unresolved(id);
+            var result = Resolve(id);
             var score = pattern.Length == 0 ? 0 : FuzzyMatcher.Score(normalized, TextNormalizer.Normalize(result.Item.Title));
             if (score is not null)
             {
@@ -101,6 +101,9 @@ public sealed class SearchService(
         }
         return [.. results.OrderByDescending(r => r.Score).ThenBy(r => r.Item.Title, StringComparer.CurrentCulture).Take(limit)];
     }
+
+    /// <summary>グローバルな識別子から項目を探す。カタログにない項目は、識別子をタイトルにした項目を返す。</summary>
+    public SearchResult Resolve(string globalId) => Find(globalId) ?? Unresolved(globalId);
 
     private static SearchResult Unresolved(string globalId)
     {

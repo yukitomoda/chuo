@@ -8,6 +8,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Chuo.Abstractions;
 using Chuo.Core;
+using Chuo.Core.Items;
 using Chuo.Core.Plugins;
 using Chuo.Core.Search;
 using Chuo.Core.Settings;
@@ -19,7 +20,7 @@ namespace Chuo.App;
 /// <summary>
 /// 設定画面。常駐するメモリを増やさないよう、開くたびに作り、閉じたら捨てる（設計 8 章）。
 /// 変更はその場で <c>settings.json</c> に書き込み、構成の再読み込みで本体とプラグインに反映する（要件定義書 9.1）。
-/// TODO: 一般のページの設定、項目、開発のページ。
+/// TODO: 一般のページの設定、項目のページのエイリアスとお気に入り、開発のページ。
 /// </summary>
 public sealed class SettingsWindow : Window
 {
@@ -32,13 +33,18 @@ public sealed class SettingsWindow : Window
     private readonly IShell _shell;
     private readonly IClipboard _clipboard;
     private readonly ILogger _logger;
+    private readonly SearchService _search;
+    private readonly ItemPreferences _preferences;
     private readonly ListBox _pluginList;
     private readonly ContentControl _page = new();
     private readonly TextBlock _status = new() { Margin = new Thickness(16, 8), TextWrapping = TextWrapping.Wrap };
 
     public SettingsWindow(
-        PluginManager plugins, IConfiguration configuration, SettingsStore store, IShell shell, IClipboard clipboard, ILogger<SettingsWindow> logger)
+        PluginManager plugins, IConfiguration configuration, SettingsStore store, IShell shell, IClipboard clipboard,
+        SearchService search, ItemPreferences preferences, ILogger<SettingsWindow> logger)
     {
+        _search = search;
+        _preferences = preferences;
         _plugins = plugins;
         _configuration = configuration;
         _store = store;
@@ -63,7 +69,7 @@ public sealed class SettingsWindow : Window
                 }),
         };
         // 本体のページとプラグインの一覧は別の ListBox にし、片方を選んだらもう片方の選択を外す
-        var generalList = new ListBox { ItemsSource = new[] { "一般" } };
+        var generalList = new ListBox { ItemsSource = new[] { "一般", "項目" } };
         generalList.ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((t, _) =>
             new TextBlock { Text = t, Margin = new Thickness(4, 2) });
         generalList.SelectionChanged += (_, _) =>
@@ -71,7 +77,14 @@ public sealed class SettingsWindow : Window
             if (generalList.SelectedIndex >= 0)
             {
                 pluginList.SelectedIndex = -1;
-                ShowGeneral();
+                if (generalList.SelectedIndex == 0)
+                {
+                    ShowGeneral();
+                }
+                else
+                {
+                    ShowItems();
+                }
             }
         };
         pluginList.SelectionChanged += (_, _) =>
@@ -116,6 +129,17 @@ public sealed class SettingsWindow : Window
         Action changed = () => Dispatcher.UIThread.Post(RefreshPlugins);
         plugins.PluginsChanged += changed;
         Closed += (_, _) => plugins.PluginsChanged -= changed;
+
+        // ランチャーや items.json の手での編集で無視が変わったら、項目のページを作り直す
+        Action preferencesChanged = () => Dispatcher.UIThread.Post(() =>
+        {
+            if (_page.Content is Control { Tag: ItemsPageTag })
+            {
+                ShowItems();
+            }
+        });
+        preferences.Changed += preferencesChanged;
+        Closed += (_, _) => preferences.Changed -= preferencesChanged;
     }
 
     private List<PluginInfo> SortedPlugins() => [.. _plugins.Plugins.OrderBy(p => p.Name, StringComparer.CurrentCulture)];
@@ -170,6 +194,60 @@ public sealed class SettingsWindow : Window
         };
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { open, copy } };
         panel.Children.Add(Labeled("ログのフォルダ", "日ごとのファイルに書き込む。不具合を報告するときに使う", new StackPanel { Spacing = 6, Children = { path, buttons } }));
+
+        _page.Content = panel;
+        _status.Text = "";
+    }
+
+    private const string ItemsPageTag = "items";
+
+    /// <summary>項目のページ。今は無視した項目の一覧と、無視の解除だけ（要件定義書 6.3、9.1）。</summary>
+    private void ShowItems()
+    {
+        var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left, Tag = ItemsPageTag };
+        panel.Children.Add(new TextBlock { Text = "項目", FontSize = 22, FontWeight = FontWeight.SemiBold });
+
+        panel.Children.Add(SectionHeading("無視"));
+        panel.Children.Add(Caption("ランチャーで無視にした項目（Ctrl+Delete か右クリックのメニュー）。検索の結果に出ない"));
+
+        var pluginNames = _plugins.Plugins.ToDictionary(p => p.Id, p => p.Name);
+        var ignored = _preferences.Current.Ignored
+            .Select(_search.Resolve)
+            .OrderBy(r => r.Item.Title, StringComparer.CurrentCulture)
+            .ToList();
+        if (ignored.Count == 0)
+        {
+            panel.Children.Add(new TextBlock { Text = "無視している項目はない。", Opacity = 0.7, Margin = new Thickness(0, 4) });
+        }
+        foreach (var result in ignored)
+        {
+            var pluginName = pluginNames.GetValueOrDefault(result.PluginId, result.PluginId);
+            var text = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    new TextBlock { Text = result.Item.Title, TextTrimming = TextTrimming.CharacterEllipsis },
+                    new TextBlock
+                    {
+                        Text = result.Item.Subtitle is { Length: > 0 } subtitle ? $"{pluginName} ・ {subtitle}" : pluginName,
+                        FontSize = 12,
+                        Opacity = 0.7,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                    },
+                },
+            };
+            var unignore = new Button { Content = "無視を解除", VerticalAlignment = VerticalAlignment.Center };
+            var globalId = result.GlobalId;
+            // 解除すると Changed でページが作り直される
+            unignore.Click += (_, _) => Write(() => _preferences.SetIgnored(globalId, false));
+
+            var row = new DockPanel { Margin = new Thickness(0, 2) };
+            DockPanel.SetDock(unignore, Dock.Right);
+            row.Children.Add(unignore);
+            row.Children.Add(text);
+            panel.Children.Add(row);
+        }
 
         _page.Content = panel;
         _status.Text = "";
