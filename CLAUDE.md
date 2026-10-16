@@ -29,3 +29,4 @@
 - テスト: `dotnet test --project tests/Chuo.Core.Tests`（Microsoft Testing Platform を使う。`global.json` を参照）。
 - Windows 向けの発行: `dotnet publish src/Chuo.App -c Release -r win-x64 --self-contained -o artifacts/publish-win`
 - パッケージのバージョンは `Directory.Packages.props` で一元管理する（`spikes/` は対象外）。
+- CI とリリースは GitHub Actions（`.github/workflows/`、設計 10.1）。リリースは `v0.1.0` のようなタグを push すると作られる。

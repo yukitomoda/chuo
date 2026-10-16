@@ -1,0 +1,55 @@
+# v で始まるタグ（例: v0.1.0）を push すると、Windows 向けの zip を作ってリリースに添付する（設計 10 章）。
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: バージョンを決める
+        id: version
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: テスト
+        run: dotnet test --project tests/Chuo.Core.Tests -c Release
+
+      - name: 発行
+        run: >
+          dotnet publish src/Chuo.App -c Release -r win-x64 --self-contained
+          -p:Version=${{ steps.version.outputs.version }}
+          -o artifacts/publish-win
+
+      - name: zip にまとめる
+        run: |
+          $zip = "artifacts/chuo-${{ steps.version.outputs.version }}-win-x64.zip"
+          Compress-Archive -Path artifacts/publish-win/* -DestinationPath $zip
+          "ZIP=$zip" >> $env:GITHUB_ENV
+
+      - name: リリースを作る
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $arguments = @('${{ github.ref_name }}', $env:ZIP, '--title', '${{ github.ref_name }}', '--generate-notes')
+          # v0.2.0-beta.1 のようにハイフンを含むバージョンは、プレリリースにする
+          if ('${{ steps.version.outputs.version }}' -match '-') { $arguments += '--prerelease' }
+          gh release create @arguments
