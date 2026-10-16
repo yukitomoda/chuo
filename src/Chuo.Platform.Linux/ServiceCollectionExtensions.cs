@@ -17,6 +17,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILauncherWindowIntegration, NullLauncherWindowIntegration>();
         services.AddSingleton<IShell, LinuxShell>();
         services.AddSingleton<IFileIconProvider, NullFileIconProvider>();
+        // TODO: XDG の autostart（~/.config/autostart/chuo.desktop）に対応する
+        services.AddSingleton<IAutoStart, UnsupportedAutoStart>();
         return services;
     }
 }

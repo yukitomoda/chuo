@@ -68,3 +68,32 @@ public sealed class NullFileIconProvider : IFileIconProvider
     public Task<IconPixels?> GetIconAsync(string path, int size, CancellationToken cancellationToken = default) =>
         Task.FromResult<IconPixels?>(null);
 }
+
+/// <summary>OS へのサインイン時に chuo を起動する設定。設定の値は OS の側に持つ。</summary>
+public interface IAutoStart
+{
+    /// <summary>この環境で使えるか。</summary>
+    bool IsSupported { get; }
+
+    /// <summary>今動いている chuo の実行ファイルのパス。</summary>
+    string CurrentPath { get; }
+
+    /// <summary>起動するように登録されている実行ファイルのパス。登録されていなければ null。</summary>
+    string? GetRegisteredPath();
+
+    /// <summary>今動いている chuo を登録するか、登録を消す。</summary>
+    void SetEnabled(bool enabled);
+}
+
+/// <summary>自動起動に対応していない環境で使う実装。</summary>
+public sealed class UnsupportedAutoStart : IAutoStart
+{
+    public bool IsSupported => false;
+
+    public string CurrentPath => Environment.ProcessPath ?? "";
+
+    public string? GetRegisteredPath() => null;
+
+    public void SetEnabled(bool enabled) =>
+        throw new PlatformNotSupportedException("この環境は自動起動に対応していません。");
+}

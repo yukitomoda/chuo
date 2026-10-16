@@ -14,6 +14,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILauncherWindowIntegration, LauncherWindowIntegration>();
         services.AddSingleton<IShell, WindowsShell>();
         services.AddSingleton<IFileIconProvider, FileIconProvider>();
+        services.AddSingleton<IAutoStart, AutoStart>();
         return services;
     }
 }

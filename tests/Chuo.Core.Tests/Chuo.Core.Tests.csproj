@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Chuo.Core\Chuo.Core.csproj" />
+    <ProjectReference Include="..\..\src\Chuo.Platform.Windows\Chuo.Platform.Windows.csproj" />
     <ProjectReference Include="..\..\plugins\Chuo.Plugins.Calculator\Chuo.Plugins.Calculator.csproj" />
     <ProjectReference Include="..\..\plugins\Chuo.Plugins.Apps\Chuo.Plugins.Apps.csproj" />
     <ProjectReference Include="..\..\plugins\Chuo.Plugins.Shortcuts\Chuo.Plugins.Shortcuts.csproj" />

@@ -321,3 +321,14 @@ public sealed class ShortcutScannerTests : IDisposable
     private static ShortcutFolder Folder(string path, bool includeSubfolders = true) =>
         new() { Path = path, IncludeSubfolders = includeSubfolders };
 }
+
+public class AutoStartTests
+{
+    [Theory]
+    [InlineData("\"C:\\Tools\\chuo\\chuo.exe\"", @"C:\Tools\chuo\chuo.exe")]
+    [InlineData("\"C:\\Program Files\\chuo\\chuo.exe\" --show", @"C:\Program Files\chuo\chuo.exe")]
+    [InlineData(@"C:\Tools\chuo.exe --show", @"C:\Tools\chuo.exe")]
+    [InlineData(@"  C:\Tools\chuo.exe", @"C:\Tools\chuo.exe")]
+    public void Run_キーの値から実行ファイルのパスを取り出す(string command, string expected) =>
+        Assert.Equal(expected, Chuo.Platform.Windows.RunCommand.ParseExecutable(command));
+}

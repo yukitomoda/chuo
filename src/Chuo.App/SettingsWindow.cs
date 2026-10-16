@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using Chuo.Abstractions;
 using Chuo.Core;
 using Chuo.Core.Items;
+using Chuo.Core.Platform;
 using Chuo.Core.Plugins;
 using Chuo.Core.Search;
 using Chuo.Core.Settings;
@@ -35,14 +36,16 @@ public sealed class SettingsWindow : Window
     private readonly ILogger _logger;
     private readonly SearchService _search;
     private readonly ItemPreferences _preferences;
+    private readonly IAutoStart _autoStart;
     private readonly ListBox _pluginList;
     private readonly ContentControl _page = new();
     private readonly TextBlock _status = new() { Margin = new Thickness(16, 8), TextWrapping = TextWrapping.Wrap };
 
     public SettingsWindow(
         PluginManager plugins, IConfiguration configuration, SettingsStore store, IShell shell, IClipboard clipboard,
-        SearchService search, ItemPreferences preferences, ILogger<SettingsWindow> logger)
+        SearchService search, ItemPreferences preferences, IAutoStart autoStart, ILogger<SettingsWindow> logger)
     {
+        _autoStart = autoStart;
         _search = search;
         _preferences = preferences;
         _plugins = plugins;
@@ -162,6 +165,12 @@ public sealed class SettingsWindow : Window
         var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(new TextBlock { Text = "一般", FontSize = 22, FontWeight = FontWeight.SemiBold });
 
+        if (_autoStart.IsSupported)
+        {
+            panel.Children.Add(SectionHeading("起動"));
+            panel.Children.Add(CreateAutoStart());
+        }
+
         panel.Children.Add(SectionHeading("ウィンドウ"));
         var window = _configuration.GetSection(ChuoSettings.WindowSection);
         foreach (var field in SettingsSchema.Describe(typeof(WindowSettings)))
@@ -197,6 +206,45 @@ public sealed class SettingsWindow : Window
 
         _page.Content = panel;
         _status.Text = "";
+    }
+
+    /// <summary>
+    /// サインイン時に起動するか（要件定義書 9.1）。値は OS の側に持つ。別の場所の chuo が登録されていれば、オフとして表示し、
+    /// その場所を出す（勝手に置き換えない）。
+    /// </summary>
+    private Control CreateAutoStart()
+    {
+        string? registered = null;
+        try
+        {
+            registered = _autoStart.GetRegisteredPath();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "自動起動の設定を読めなかった");
+        }
+        var isCurrent = registered is not null && string.Equals(
+            Path.GetFullPath(registered), Path.GetFullPath(_autoStart.CurrentPath), StringComparison.OrdinalIgnoreCase);
+
+        var panel = new StackPanel { Spacing = 4 };
+        var check = new CheckBox { Content = "サインインしたときに起動する", IsChecked = isCurrent };
+        var other = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = Brushes.DarkOrange };
+        void ShowOther(string? path)
+        {
+            other.Text = path is null ? "" : $"別の場所の chuo が登録されている: {path}\nオンにすると、いま動いている chuo に置き換える。";
+            other.IsVisible = path is not null;
+        }
+        ShowOther(isCurrent ? null : registered);
+
+        check.IsCheckedChanged += (_, _) => Run("自動起動の設定を変えられなかった", () =>
+        {
+            _autoStart.SetEnabled(check.IsChecked == true);
+            ShowOther(null);
+        });
+
+        panel.Children.Add(check);
+        panel.Children.Add(other);
+        return Labeled(null, "ランチャーは隠したまま、タスクトレイに常駐する", panel);
     }
 
     private const string ItemsPageTag = "items";
