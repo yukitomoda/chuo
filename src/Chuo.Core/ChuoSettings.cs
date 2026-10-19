@@ -24,7 +24,7 @@ public sealed class ChuoSettings
 /// <summary>ランチャーのウィンドウの設定。設定画面の一般のページに出す。</summary>
 public sealed class WindowSettings
 {
-    [Display(Name = "表示する画面", Description = "画面が複数あるときに、ランチャーをどの画面に表示するか")]
+    [Display(Name = "表示する画面")]
     public LauncherScreen Screen { get; set; } = LauncherScreen.Cursor;
 }
 

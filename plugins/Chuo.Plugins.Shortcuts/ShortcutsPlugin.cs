@@ -8,7 +8,7 @@ namespace Chuo.Plugins.Shortcuts;
 public sealed class ShortcutsOptions
 {
     // 既定値を入れると、設定の値がその後ろに追加されてしまう（構成のバインドの仕様）ので空にしておく
-    [Display(Name = "対象のフォルダ", Description = "この中のショートカットと実行ファイルを検索する")]
+    [Display(Name = "対象のフォルダ")]
     public List<ShortcutFolder> Folders { get; set; } = [];
 }
 

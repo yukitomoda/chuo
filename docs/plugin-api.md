@@ -16,8 +16,8 @@
 }
 ```
 
-- `hostApi` は `HostApi.Version`（今は 1.2）と比べる。`1.x` と `1` はメジャーが同じなら、`1.1` はさらにホストのマイナーが 1 以上なら読み込む。
-- API を足したらマイナーを、互換性のない変更をしたらメジャーを上げる。1.1 では `IShell.RunAsAdministrator` と `ItemAction.Kind` を、1.2 では `ResultItem.Completion` を足した。
+- `hostApi` は `HostApi.Version`（今は 1.3）と比べる。`1.x` と `1` はメジャーが同じなら、`1.1` はさらにホストのマイナーが 1 以上なら読み込む。
+- API を足したらマイナーを、互換性のない変更をしたらメジャーを上げる。1.1 では `IShell.RunAsAdministrator` と `ItemAction.Kind` を、1.2 では `ResultItem.Completion` を、1.3 ではプロバイダの属性の `Title` を足した。
 
 ## プロバイダの宣言
 
@@ -33,8 +33,10 @@ public sealed class Calculator : ILiveQueryProvider { ... }
 
 | 種類（設計 3 章） | インターフェイス | 属性 |
 |---|---|---|
-| カタログ型 | `ICatalogProvider`（`InitializeAsync(ICatalog, CancellationToken)`） | `[CatalogProvider]`（`Keyword`、`IncludeInGlobal`） |
-| ライブクエリ型 | `ILiveQueryProvider`（`QueryAsync(Query, CancellationToken)`） | `[LiveQueryProvider]`（`Keyword`、`GlobalTrigger`、`TimeoutMs`） |
+| カタログ型 | `ICatalogProvider`（`InitializeAsync(ICatalog, CancellationToken)`） | `[CatalogProvider]`（`Title`、`Keyword`、`IncludeInGlobal`） |
+| ライブクエリ型 | `ILiveQueryProvider`（`QueryAsync(Query, CancellationToken)`） | `[LiveQueryProvider]`（`Title`、`Keyword`、`GlobalTrigger`、`TimeoutMs`） |
+
+- `Title` は設定画面に出す名前で、プラグインにプロバイダが複数あるときの見出しに使う。なければクラス名を出す。
 
 - ライブクエリ型を `IQueryProvider` としないのは、暗黙の using に含まれる `System.Linq.IQueryProvider` と名前が衝突するため。
 
@@ -110,7 +112,7 @@ public sealed class ShortcutsPlugin : IChuoPlugin
 | `List<string>` | 一覧と追加・削除。`[FolderPath]` / `[FilePath]` を付けると「参照…」が付く |
 | `List<T>`（T は設定のクラス） | 要素ごとに値を持つ一覧。下を参照 |
 
-- 表示名、説明、並び順は `[Display(Name, Description, Order)]` で指定する。
+- 表示名、説明、並び順は `[Display(Name, Description, Order)]` で指定する。説明は、名前で分かるなら付けない。付けるときも短い句にする（設計 8 章）。
 - これ以外の型のプロパティは画面に出さず、読み込み時にログに警告を出す。
 - `List<T>` の要素のクラスにも、同じ型と属性が使える。
   - 最初の `string` のプロパティ（並び順で最初のもの）が要素の代表になる。一覧に表示し、追加の入力欄でこの値を入れる。同じ値の要素は追加できない。`string` のプロパティがないクラスは対応しない。

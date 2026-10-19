@@ -6,6 +6,9 @@ namespace Chuo.Abstractions;
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class CatalogProviderAttribute : Attribute
 {
+    /// <summary>設定画面に出す名前。プラグインにプロバイダが複数あるときに使う。なければクラス名。</summary>
+    public string? Title { get; set; }
+
     /// <summary>このプロバイダだけを検索するときのキーワード（例: <c>f</c>）。</summary>
     public string? Keyword { get; set; }
 
@@ -19,6 +22,9 @@ public sealed class CatalogProviderAttribute : Attribute
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class LiveQueryProviderAttribute : Attribute
 {
+    /// <summary>設定画面に出す名前。プラグインにプロバイダが複数あるときに使う。なければクラス名。</summary>
+    public string? Title { get; set; }
+
     /// <summary>このプロバイダを呼び出すキーワード（例: <c>g</c>）。</summary>
     public string? Keyword { get; set; }
 

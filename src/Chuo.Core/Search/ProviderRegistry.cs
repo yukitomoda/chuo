@@ -20,12 +20,14 @@ internal interface IProviderRegistration
 }
 
 /// <summary>カタログ型のプロバイダの登録内容。</summary>
-internal sealed record CatalogRegistration(string PluginId, string ProviderName, ProviderCatalog Catalog, string? Keyword, bool IncludeInGlobal)
+internal sealed record CatalogRegistration(
+    string PluginId, string ProviderName, ProviderCatalog Catalog, string? Keyword, bool IncludeInGlobal, string? Title = null)
     : IProviderRegistration;
 
 /// <summary>ライブクエリ型のプロバイダの登録内容。グローバルトリガーがあるものだけが全体検索に参加できる。</summary>
 internal sealed record LiveQueryRegistration(
-    string PluginId, string ProviderName, ILiveQueryProvider Provider, string? Keyword, Regex? GlobalTrigger, TimeSpan Timeout)
+    string PluginId, string ProviderName, ILiveQueryProvider Provider, string? Keyword, Regex? GlobalTrigger, TimeSpan Timeout,
+    string? Title = null)
     : IProviderRegistration
 {
     public bool IncludeInGlobal => GlobalTrigger is not null;

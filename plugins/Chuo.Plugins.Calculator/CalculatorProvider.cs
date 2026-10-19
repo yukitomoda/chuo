@@ -25,7 +25,7 @@ public sealed class CalculatorProvider : ILiveQueryProvider
         {
             Id = "result",
             Title = text,
-            Subtitle = $"{expression} の計算結果（Enter でコピー）",
+            Subtitle = "Enter でコピー",
             Actions = [ItemAction.CopyText(text)],
         };
         return ValueTask.FromResult<IReadOnlyList<ResultItem>>([item]);

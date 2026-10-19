@@ -162,7 +162,7 @@ public sealed class SettingsWindow : Window
     /// <summary>一般のページ。TODO: ホットキー、自動起動、テーマ、表示位置、最大表示件数、IME（要件定義書 9.1）。</summary>
     private void ShowGeneral()
     {
-        var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Stretch };
         panel.Children.Add(new TextBlock { Text = "一般", FontSize = 22, FontWeight = FontWeight.SemiBold });
 
         if (_autoStart.IsSupported)
@@ -193,7 +193,7 @@ public sealed class SettingsWindow : Window
             try
             {
                 await _clipboard.SetTextAsync(directory);
-                ShowInfo("ログのフォルダのパスをコピーした。");
+                ShowInfo("コピーした");
             }
             catch (Exception ex)
             {
@@ -202,9 +202,9 @@ public sealed class SettingsWindow : Window
             }
         };
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { open, copy } };
-        panel.Children.Add(Labeled("ログのフォルダ", "日ごとのファイルに書き込む。不具合を報告するときに使う", new StackPanel { Spacing = 6, Children = { path, buttons } }));
+        panel.Children.Add(Labeled("ログのフォルダ", null, new StackPanel { Spacing = 6, Children = { path, buttons } }));
 
-        _page.Content = panel;
+        ShowPage(panel);
         _status.Text = "";
     }
 
@@ -231,7 +231,7 @@ public sealed class SettingsWindow : Window
         var other = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = Brushes.DarkOrange };
         void ShowOther(string? path)
         {
-            other.Text = path is null ? "" : $"別の場所の chuo が登録されている: {path}\nオンにすると、いま動いている chuo に置き換える。";
+            other.Text = path is null ? "" : $"別の chuo が登録済み: {path}";
             other.IsVisible = path is not null;
         }
         ShowOther(isCurrent ? null : registered);
@@ -244,27 +244,40 @@ public sealed class SettingsWindow : Window
 
         panel.Children.Add(check);
         panel.Children.Add(other);
-        return Labeled(null, "ランチャーは隠したまま、タスクトレイに常駐する", panel);
+        return panel;
     }
 
     private const string ItemsPageTag = "items";
 
+    /// <summary>
+    /// ページを出す。入力欄の幅をそろえるため、ページは幅いっぱい（最大 640）に広げて左に寄せる。
+    /// 中身の幅に合わせると、説明の短いページで入力欄が狭くなる。
+    /// </summary>
+    private void ShowPage(Control panel)
+    {
+        var grid = new Grid { Tag = panel.Tag };
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star) { MaxWidth = 640 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        grid.Children.Add(panel);
+        _page.Content = grid;
+    }
+
     /// <summary>項目のページ。エイリアスの一覧と編集、無視した項目の一覧と無視の解除（要件定義書 6.1、6.3、9.1）。</summary>
     private void ShowItems()
     {
-        var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left, Tag = ItemsPageTag };
+        var panel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = ItemsPageTag };
         panel.Children.Add(new TextBlock { Text = "項目", FontSize = 22, FontWeight = FontWeight.SemiBold });
         var pluginNames = _plugins.Plugins.ToDictionary(p => p.Id, p => p.Name);
 
         panel.Children.Add(SectionHeading("エイリアス"));
-        panel.Children.Add(Caption("ランチャーで付けたエイリアス（Ctrl+E か右クリックのメニュー）。入力と一致すると最上位に、先頭と一致すると上のほうに出る"));
+        panel.Children.Add(Caption("ランチャーで Ctrl+E"));
         var aliased = _preferences.Current.Aliases
             .Select(p => (Result: _search.Resolve(p.Key), Aliases: p.Value))
             .OrderBy(p => p.Result.Item.Title, StringComparer.CurrentCulture)
             .ToList();
         if (aliased.Count == 0)
         {
-            panel.Children.Add(new TextBlock { Text = "エイリアスを付けた項目はない。", Opacity = 0.7, Margin = new Thickness(0, 4) });
+            panel.Children.Add(new TextBlock { Text = "なし", Opacity = 0.7, Margin = new Thickness(0, 4) });
         }
         foreach (var (result, aliases) in aliased)
         {
@@ -285,7 +298,7 @@ public sealed class SettingsWindow : Window
         }
 
         panel.Children.Add(SectionHeading("無視"));
-        panel.Children.Add(Caption("ランチャーで無視にした項目（Ctrl+Delete か右クリックのメニュー）。検索の結果に出ない"));
+        panel.Children.Add(Caption("ランチャーで Ctrl+Delete"));
 
         var ignored = _preferences.Current.Ignored
             .Select(_search.Resolve)
@@ -293,7 +306,7 @@ public sealed class SettingsWindow : Window
             .ToList();
         if (ignored.Count == 0)
         {
-            panel.Children.Add(new TextBlock { Text = "無視している項目はない。", Opacity = 0.7, Margin = new Thickness(0, 4) });
+            panel.Children.Add(new TextBlock { Text = "なし", Opacity = 0.7, Margin = new Thickness(0, 4) });
         }
         foreach (var result in ignored)
         {
@@ -306,7 +319,7 @@ public sealed class SettingsWindow : Window
                 result.Item.Title, result.Item.Subtitle is { Length: > 0 } subtitle ? $"{pluginName} ・ {subtitle}" : pluginName, unignore));
         }
 
-        _page.Content = panel;
+        ShowPage(panel);
         _status.Text = "";
     }
 
@@ -352,19 +365,19 @@ public sealed class SettingsWindow : Window
 
     private void ShowPlugin(PluginInfo plugin)
     {
-        var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Stretch };
         panel.Children.Add(new TextBlock { Text = plugin.Name, FontSize = 22, FontWeight = FontWeight.SemiBold });
-        panel.Children.Add(Caption($"{plugin.Id}  バージョン {plugin.Version}"));
+        panel.Children.Add(Caption($"{plugin.Id}  {plugin.Version}"));
 
         var enabledKey = PluginManager.EnabledKey(plugin.Id);
-        var enabled = new CheckBox { Content = "このプラグインを使う", IsChecked = plugin.IsEnabled };
+        var enabled = new CheckBox { Content = "有効", IsChecked = plugin.IsEnabled };
         // 有効は既定なので、キーを消して書き込む
         enabled.IsCheckedChanged += (_, _) => Write(() => _store.Set(enabledKey, enabled.IsChecked == true ? null : JsonValue.Create(false)));
-        panel.Children.Add(Labeled(null, "オフにすると、プラグインを読み込まず、検索にも出さない", enabled));
+        panel.Children.Add(enabled);
 
         if (!plugin.IsEnabled)
         {
-            _page.Content = panel;
+            ShowPage(panel);
             _status.Text = "";
             return;
         }
@@ -380,7 +393,7 @@ public sealed class SettingsWindow : Window
 
         foreach (var provider in plugin.Providers)
         {
-            panel.Children.Add(SectionHeading(plugin.Providers.Count > 1 ? $"検索（{provider.Name}）" : "検索"));
+            panel.Children.Add(SectionHeading(plugin.Providers.Count > 1 ? provider.Title : "検索"));
             AddProviderSettings(panel, plugin, provider);
         }
 
@@ -394,7 +407,7 @@ public sealed class SettingsWindow : Window
             }
         }
 
-        _page.Content = panel;
+        ShowPage(panel);
         _status.Text = "";
     }
 
@@ -407,9 +420,10 @@ public sealed class SettingsWindow : Window
             Text = _configuration[keywordKey] ?? provider.DefaultKeyword ?? "",
             Width = 160,
             HorizontalAlignment = HorizontalAlignment.Left,
+            PlaceholderText = "なし",
         };
         BindText(keyword, text => _store.Set(keywordKey, JsonValue.Create(text.Trim())));
-        panel.Children.Add(Labeled("キーワード", "入力の先頭にこの語と空白を付けると、このプラグインだけを検索する。空にするとキーワードなし", keyword));
+        panel.Children.Add(Labeled("キーワード", null, keyword));
 
         if (provider.CanIncludeInGlobal)
         {
@@ -420,7 +434,7 @@ public sealed class SettingsWindow : Window
                 IsChecked = bool.TryParse(_configuration[globalKey], out var value) ? value : provider.DefaultIncludeInGlobal,
             };
             includeInGlobal.IsCheckedChanged += (_, _) => Write(() => _store.Set(globalKey, JsonValue.Create(includeInGlobal.IsChecked == true)));
-            panel.Children.Add(Labeled(null, "オフにすると、キーワードを付けたときだけ検索する", includeInGlobal));
+            panel.Children.Add(includeInGlobal);
         }
     }
 
@@ -714,7 +728,7 @@ public sealed class SettingsWindow : Window
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "選択のダイアログを開けなかった");
-            ShowError("選択のダイアログを開けなかった。パスを直接入力してください。");
+            ShowError("ダイアログを開けなかった。パスを直接入力してください");
             return null;
         }
     }

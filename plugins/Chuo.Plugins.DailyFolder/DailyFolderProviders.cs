@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace Chuo.Plugins.DailyFolder;
 
 /// <summary>全体検索で、今日のフォルダを開く項目を出す。</summary>
-[CatalogProvider(IncludeInGlobal = true)]
+[CatalogProvider(Title = "今日のフォルダ", IncludeInGlobal = true)]
 public sealed class DailyFolderCatalogProvider : ICatalogProvider
 {
     private readonly DailyFolders _folders;
@@ -19,7 +19,7 @@ public sealed class DailyFolderCatalogProvider : ICatalogProvider
             {
                 Id = "today",
                 Title = "Daily Folder",
-                Subtitle = "今日のフォルダを開く（なければ作る）",
+                Subtitle = "今日のフォルダを開く",
                 Keywords = ["今日のフォルダ"],
                 Actions = [DailyFolderCommands.OpenToday(_folders)],
             },
@@ -32,7 +32,7 @@ public sealed class DailyFolderCatalogProvider : ICatalogProvider
 /// キーワードの後のサブコマンドで操作する。
 /// 何も付けなければ今日のフォルダ、<c>prune</c> で古いフォルダの削除、<c>keep</c> で削除しないフォルダの指定。
 /// </summary>
-[LiveQueryProvider(Keyword = "daily")]
+[LiveQueryProvider(Title = "コマンド", Keyword = "daily")]
 public sealed class DailyFolderCommands : ILiveQueryProvider
 {
     private const string Prune = "prune";
@@ -93,8 +93,8 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
         }
         (string Name, string Description)[] commands =
         [
-            (Prune, $"古いフォルダをごみ箱に移す（{_folders.RetentionDays} 日より前のもの。保持したものは残す）"),
-            (Keep, "フォルダを保持して、prune で削除しないようにする"),
+            (Prune, $"{_folders.RetentionDays} 日より古いフォルダを削除"),
+            (Keep, "prune で削除しないフォルダを選ぶ"),
         ];
         foreach (var (name, description) in commands.Where(c => c.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
         {
@@ -126,7 +126,6 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
             {
                 Id = "prune:none",
                 Title = "削除するフォルダはない",
-                Subtitle = $"{_folders.RetentionDays} 日より前のフォルダと、保持したフォルダは残す",
             });
             return items;
         }
@@ -136,7 +135,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
             {
                 Id = "prune:run",
                 Title = $"{candidates.Count} 件のフォルダをごみ箱に移す",
-                Subtitle = $"{candidates[^1].Name} 〜 {candidates[0].Name}（残したいフォルダは Ctrl+Enter で保持する）",
+                Subtitle = $"{candidates[^1].Name} 〜 {candidates[0].Name}（ごみ箱へ）",
                 Actions =
                 [
                     new ItemAction("ごみ箱に移す", async ctx =>
@@ -157,15 +156,15 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
         var folders = _folders.List().Where(f => f.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
         if (folders.Count == 0)
         {
-            return [new ResultItem { Id = "keep:none", Title = "フォルダがない", Subtitle = filter.Length == 0 ? null : $"「{filter}」を含む名前のフォルダはない" }];
+            return [new ResultItem { Id = "keep:none", Title = "フォルダがない" }];
         }
         return
         [
             .. folders.Select(folder => new ResultItem
             {
                 Id = "folder:" + folder.Name,
-                Title = folder.Kept ? $"{folder.Name}（保持している）" : folder.Name,
-                Subtitle = folder.Kept ? "Enter で保持を解除する" : "Enter で保持する",
+                Title = folder.Kept ? $"★ {folder.Name}" : folder.Name,
+                Subtitle = folder.Kept ? "保持中 ・ Enter で解除" : "Enter で保持",
                 Actions = [ToggleKept(folder, refresh), ItemAction.Open(folder.Path)],
             }),
         ];
@@ -177,7 +176,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
         {
             Id = "folder:" + folder.Name,
             Title = folder.Name,
-            Subtitle = folder.Path,
+            Subtitle = "Ctrl+Enter で保持",
             Actions = [ItemAction.Open(folder.Path), ToggleKept(folder, refresh)],
         };
 

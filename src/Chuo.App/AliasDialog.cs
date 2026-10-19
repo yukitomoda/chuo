@@ -22,7 +22,7 @@ public sealed class AliasDialog : Window
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        _input = new TextBox { Text = string.Join(" ", aliases) };
+        _input = new TextBox { Text = string.Join(" ", aliases), PlaceholderText = "空白で区切って複数" };
         var save = new Button { Content = "保存", IsDefault = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
         var cancel = new Button { Content = "キャンセル", IsCancel = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
         save.Click += (_, _) => Close(Split(_input.Text));
@@ -36,13 +36,6 @@ public sealed class AliasDialog : Window
             {
                 new TextBlock { Text = itemTitle, FontSize = 16, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
                 _input,
-                new TextBlock
-                {
-                    Text = "空白で区切ると、複数付けられる。入力がエイリアスと一致すると最上位に、エイリアスの先頭と一致すると上のほうに出る",
-                    FontSize = 12,
-                    Opacity = 0.65,
-                    TextWrapping = TextWrapping.Wrap,
-                },
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,

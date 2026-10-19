@@ -33,7 +33,9 @@ public sealed record PluginInfo(
 /// <param name="DefaultKeyword">プロバイダが宣言したキーワード。</param>
 /// <param name="DefaultIncludeInGlobal">プロバイダが宣言した、全体検索に含めるか。</param>
 /// <param name="CanIncludeInGlobal">全体検索に参加できるか。ライブクエリ型はグローバルトリガーを宣言したものだけが参加できる。</param>
-public sealed record ProviderInfo(string Name, bool IsLiveQuery, string? DefaultKeyword, bool DefaultIncludeInGlobal, bool CanIncludeInGlobal);
+/// <param name="Title">設定画面に出す名前。プロバイダの属性になければクラス名。</param>
+public sealed record ProviderInfo(
+    string Name, string Title, bool IsLiveQuery, string? DefaultKeyword, bool DefaultIncludeInGlobal, bool CanIncludeInGlobal);
 
 /// <summary>
 /// プラグインの読み込み、開始、アンロードを行う。本体の汎用ホストのホステッドサービスとして動く。
@@ -235,9 +237,9 @@ public sealed class PluginManager(
         new(plugin.Manifest.Id, plugin.Manifest.Name, plugin.Manifest.Version, IsEnabled: true,
             [
                 .. plugin.Catalogs.Select(c => new ProviderInfo(
-                    c.Registration.ProviderName, false, c.Registration.Keyword, c.Registration.IncludeInGlobal, CanIncludeInGlobal: true)),
+                    c.Registration.ProviderName, c.Registration.Title ?? c.Registration.ProviderName, false, c.Registration.Keyword, c.Registration.IncludeInGlobal, CanIncludeInGlobal: true)),
                 .. plugin.LiveQueries.Select(q => new ProviderInfo(
-                    q.ProviderName, true, q.Keyword, q.IncludeInGlobal, CanIncludeInGlobal: q.GlobalTrigger is not null)),
+                    q.ProviderName, q.Title ?? q.ProviderName, true, q.Keyword, q.IncludeInGlobal, CanIncludeInGlobal: q.GlobalTrigger is not null)),
             ],
             plugin.SettingsTypes);
 

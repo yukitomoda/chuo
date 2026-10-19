@@ -10,7 +10,7 @@ public sealed class WebSearchOptions
     [Display(Name = "検索エンジンの名前")]
     public string EngineName { get; set; } = "Google";
 
-    [Display(Name = "検索の URL", Description = "{0} が検索の文字列に置き換わる")]
+    [Display(Name = "検索の URL", Description = "{0} が検索語になる")]
     public string UrlTemplate { get; set; } = "https://www.google.com/search?q={0}";
 }
 

@@ -101,14 +101,15 @@ internal sealed class PluginInstance
 
             var catalogs = catalogTypes
                 .Select(p => (
-                    new CatalogRegistration(manifest.Id, p.Type.Name, new ProviderCatalog(), p.Attribute.Keyword, p.Attribute.IncludeInGlobal),
+                    new CatalogRegistration(
+                        manifest.Id, p.Type.Name, new ProviderCatalog(), p.Attribute.Keyword, p.Attribute.IncludeInGlobal, p.Attribute.Title),
                     (ICatalogProvider)host.Services.GetRequiredService(p.Type)))
                 .ToList();
             var liveQueries = liveQueryTypes
                 .Select(p => new LiveQueryRegistration(
                     manifest.Id, p.Type.Name, (ILiveQueryProvider)host.Services.GetRequiredService(p.Type), p.Attribute.Keyword,
                     p.Attribute.GlobalTrigger is { } trigger ? new Regex(trigger, RegexOptions.CultureInvariant) : null,
-                    TimeSpan.FromMilliseconds(p.Attribute.TimeoutMs)))
+                    TimeSpan.FromMilliseconds(p.Attribute.TimeoutMs), p.Attribute.Title))
                 .ToList();
 
             var settingsTypes = host.Services.GetServices<PluginSettingsDescriptor>().Select(d => d.OptionsType).ToList();
