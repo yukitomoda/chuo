@@ -17,7 +17,7 @@ public sealed class DailyFolders(IOptionsMonitor<DailyFolderOptions> options, Ke
 
     public string TodayPath => System.IO.Path.Combine(Root, Today.ToString(Format, CultureInfo.InvariantCulture));
 
-    private string Root => options.CurrentValue.Root;
+    private string Root => options.CurrentValue.Root is { Length: > 0 } root ? root : DailyFolderOptions.DefaultRoot;
 
     private string Format => options.CurrentValue.NameFormat is { Length: > 0 } format ? format : "yyyy-MM-dd";
 

@@ -17,7 +17,13 @@ public sealed class DailyFolderTests : IDisposable
         _folders = new DailyFolders(new StaticOptionsMonitor<DailyFolderOptions>(_options), _kept, new FixedTime(new DateTime(2026, 10, 19, 9, 0, 0)));
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose()
+    {
+        if (Directory.Exists(_root))
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+    }
 
     private void Create(params string[] names)
     {
@@ -62,6 +68,16 @@ public sealed class DailyFolderTests : IDisposable
 
         Assert.False(_kept.Toggle("2026-10-01"));
         Assert.False(new KeptFolders(Path.Combine(_root, "data", "kept.json")).Contains("2026-10-01"));
+    }
+
+    [Fact]
+    public void 既定の置き場所はホームの直下にしない()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        Assert.Equal("Daily", Path.GetFileName(DailyFolderOptions.DefaultRoot));
+        Assert.NotEqual(Path.GetFullPath(home).TrimEnd(Path.DirectorySeparatorChar),
+            Path.GetFullPath(Path.GetDirectoryName(DailyFolderOptions.DefaultRoot)!).TrimEnd(Path.DirectorySeparatorChar));
     }
 
     private sealed class FixedTime(DateTime local) : TimeProvider
