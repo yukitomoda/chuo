@@ -45,6 +45,7 @@ public sealed class LauncherWindow : Window
     private bool _prewarming;
     private bool _hiding;
     private bool _menuOpen;
+    private bool _dialogOpen;
 
     public LauncherWindow(
         SearchService search, IShell shell, IClipboard clipboard, ILauncherWindowIntegration integration, IconCache icons,
@@ -115,8 +116,8 @@ public sealed class LauncherWindow : Window
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         Deactivated += (_, _) =>
         {
-            // 右クリックのメニューを開いている間は、ウィンドウが非アクティブになっても隠さない
-            if (!_prewarming && !_menuOpen && IsVisible)
+            // 右クリックのメニューやダイアログを開いている間は、ウィンドウが非アクティブになっても隠さない
+            if (!_prewarming && !_menuOpen && !_dialogOpen && IsVisible)
             {
                 HideLauncher();
             }
@@ -339,6 +340,27 @@ public sealed class LauncherWindow : Window
         UpdatePreference(result, () => _preferences.SetIgnored(result.GlobalId, ignored));
     }
 
+    /// <summary>エイリアスのダイアログを開き、保存したら検索し直す（要件定義書 6.1）。</summary>
+    private async void EditAliases(SearchResult result)
+    {
+        _dialogOpen = true;
+        IReadOnlyList<string>? aliases;
+        try
+        {
+            aliases = await AliasDialog.EditAsync(this, result.Item.Title, _preferences.Current.AliasesOf(result.GlobalId).Select(a => a.Text));
+        }
+        finally
+        {
+            _dialogOpen = false;
+        }
+        Activate();
+        _input.Focus();
+        if (aliases is not null)
+        {
+            UpdatePreference(result, () => _preferences.SetAliases(result.GlobalId, aliases));
+        }
+    }
+
     private void UpdatePreference(SearchResult result, Action update)
     {
         try
@@ -379,6 +401,7 @@ public sealed class LauncherWindow : Window
             preference.IsFavorite(result.GlobalId) ? "お気に入りから外す" : "お気に入りに追加", "Ctrl+D", () => ToggleFavorite(result)));
         menuItems.Add(MenuItemFor(
             preference.IsIgnored(result.GlobalId) ? "無視を解除" : "無視する", "Ctrl+Delete", () => ToggleIgnored(result)));
+        menuItems.Add(MenuItemFor("エイリアスを設定…", "Ctrl+E", () => EditAliases(result)));
 
         var menu = new ContextMenu { ItemsSource = menuItems };
         menu.Opened += (_, _) => _menuOpen = true;
@@ -447,6 +470,10 @@ public sealed class LauncherWindow : Window
             case Key.Tab when e.KeyModifiers == KeyModifiers.None:
                 // Tab は補完だけに使う。補完がないときも、フォーカスを入力欄から移さない（要件定義書 8 章）
                 AcceptCompletion();
+                break;
+            case Key.E when e.KeyModifiers == KeyModifiers.Control && _results.SelectedItem is SearchResult aliased:
+                // エイリアスの設定（要件定義書 6.1）
+                EditAliases(aliased);
                 break;
             case Key.OemComma when e.KeyModifiers == KeyModifiers.Control:
                 // 設定画面を開く（要件定義書 9.1）

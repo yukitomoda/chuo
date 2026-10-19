@@ -144,4 +144,52 @@ public sealed class SearchWithPreferencesTests : IDisposable
         Assert.Equal(["Uninstall Fire", "apps:Removed"], (await SearchAsync(":ignored")).Order(StringComparer.Ordinal));
         Assert.Equal(["Uninstall Fire"], await SearchAsync(":ignored uninst"));
     }
+
+    [Fact]
+    public async Task エイリアスの前方一致はあいまいな一致より上に出し_補完にエイリアスを出す()
+    {
+        _preferences.SetAliases("apps:Files", ["browser", "fx"]);
+
+        var results = await _search.SearchAsync("br", TestContext.Current.CancellationToken);
+
+        Assert.Equal("Files", results[0].Item.Title);
+        Assert.Equal("owser", results[0].CompletionSuffix("br"));
+        Assert.Equal("Files", (await SearchAsync("f"))[0]);
+    }
+
+    [Fact]
+    public async Task エイリアスの完全一致はライブクエリの結果より上に固定する()
+    {
+        _registry.Add(new LiveQueryRegistration("live", "Live", new FixedProvider(), null, new System.Text.RegularExpressions.Regex("^ff$"), TimeSpan.FromSeconds(1)));
+        _preferences.SetAliases("apps:Uninstall Fire", ["ff"]);
+        _preferences.SetFavorite("apps:Firefox", true);
+
+        Assert.Equal(["Uninstall Fire", "live", "Firefox"], (await SearchAsync("ff")).Take(3));
+    }
+
+    [Fact]
+    public async Task 無視した項目はエイリアスが一致しても出さない()
+    {
+        _preferences.SetAliases("apps:Files", ["browser"]);
+        _preferences.SetIgnored("apps:Files", true);
+
+        Assert.DoesNotContain("Files", await SearchAsync("browser"));
+    }
+
+    [Fact]
+    public void エイリアスは空白を除き重複を捨て_空ならキーを消す()
+    {
+        _preferences.SetAliases("apps:Files", [" browser ", "Browser", "", "fx"]);
+        Assert.Equal(["browser", "fx"], _preferences.Current.AliasesOf("apps:Files").Select(a => a.Text));
+
+        _preferences.SetAliases("apps:Files", []);
+        Assert.Empty(_preferences.Current.Aliases);
+        Assert.DoesNotContain("apps:Files", File.ReadAllText(Path.Combine(_directory, "items.json")));
+    }
+
+    private sealed class FixedProvider : ILiveQueryProvider
+    {
+        public ValueTask<IReadOnlyList<ResultItem>> QueryAsync(Query query, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<IReadOnlyList<ResultItem>>([new ResultItem { Id = "live", Title = "live" }]);
+    }
 }

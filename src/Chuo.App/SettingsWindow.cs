@@ -249,16 +249,44 @@ public sealed class SettingsWindow : Window
 
     private const string ItemsPageTag = "items";
 
-    /// <summary>項目のページ。今は無視した項目の一覧と、無視の解除だけ（要件定義書 6.3、9.1）。</summary>
+    /// <summary>項目のページ。エイリアスの一覧と編集、無視した項目の一覧と無視の解除（要件定義書 6.1、6.3、9.1）。</summary>
     private void ShowItems()
     {
         var panel = new StackPanel { Spacing = 8, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left, Tag = ItemsPageTag };
         panel.Children.Add(new TextBlock { Text = "項目", FontSize = 22, FontWeight = FontWeight.SemiBold });
+        var pluginNames = _plugins.Plugins.ToDictionary(p => p.Id, p => p.Name);
+
+        panel.Children.Add(SectionHeading("エイリアス"));
+        panel.Children.Add(Caption("ランチャーで付けたエイリアス（Ctrl+E か右クリックのメニュー）。入力と一致すると最上位に、先頭と一致すると上のほうに出る"));
+        var aliased = _preferences.Current.Aliases
+            .Select(p => (Result: _search.Resolve(p.Key), Aliases: p.Value))
+            .OrderBy(p => p.Result.Item.Title, StringComparer.CurrentCulture)
+            .ToList();
+        if (aliased.Count == 0)
+        {
+            panel.Children.Add(new TextBlock { Text = "エイリアスを付けた項目はない。", Opacity = 0.7, Margin = new Thickness(0, 4) });
+        }
+        foreach (var (result, aliases) in aliased)
+        {
+            var edit = new Button { Content = "編集…" };
+            var remove = new Button { Content = "削除" };
+            var globalId = result.GlobalId;
+            var title = result.Item.Title;
+            // 書き込むと Changed でページが作り直される
+            edit.Click += async (_, _) =>
+            {
+                if (await AliasDialog.EditAsync(this, title, aliases.Select(a => a.Text)) is { } edited)
+                {
+                    Write(() => _preferences.SetAliases(globalId, edited));
+                }
+            };
+            remove.Click += (_, _) => Write(() => _preferences.SetAliases(globalId, []));
+            panel.Children.Add(ItemRow(title, $"{pluginNames.GetValueOrDefault(result.PluginId, result.PluginId)} ・ {string.Join("  ", aliases.Select(a => a.Text))}", edit, remove));
+        }
 
         panel.Children.Add(SectionHeading("無視"));
         panel.Children.Add(Caption("ランチャーで無視にした項目（Ctrl+Delete か右クリックのメニュー）。検索の結果に出ない"));
 
-        var pluginNames = _plugins.Plugins.ToDictionary(p => p.Id, p => p.Name);
         var ignored = _preferences.Current.Ignored
             .Select(_search.Resolve)
             .OrderBy(r => r.Item.Title, StringComparer.CurrentCulture)
@@ -270,35 +298,41 @@ public sealed class SettingsWindow : Window
         foreach (var result in ignored)
         {
             var pluginName = pluginNames.GetValueOrDefault(result.PluginId, result.PluginId);
-            var text = new StackPanel
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    new TextBlock { Text = result.Item.Title, TextTrimming = TextTrimming.CharacterEllipsis },
-                    new TextBlock
-                    {
-                        Text = result.Item.Subtitle is { Length: > 0 } subtitle ? $"{pluginName} ・ {subtitle}" : pluginName,
-                        FontSize = 12,
-                        Opacity = 0.7,
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                    },
-                },
-            };
-            var unignore = new Button { Content = "無視を解除", VerticalAlignment = VerticalAlignment.Center };
+            var unignore = new Button { Content = "無視を解除" };
             var globalId = result.GlobalId;
             // 解除すると Changed でページが作り直される
             unignore.Click += (_, _) => Write(() => _preferences.SetIgnored(globalId, false));
-
-            var row = new DockPanel { Margin = new Thickness(0, 2) };
-            DockPanel.SetDock(unignore, Dock.Right);
-            row.Children.Add(unignore);
-            row.Children.Add(text);
-            panel.Children.Add(row);
+            panel.Children.Add(ItemRow(
+                result.Item.Title, result.Item.Subtitle is { Length: > 0 } subtitle ? $"{pluginName} ・ {subtitle}" : pluginName, unignore));
         }
 
         _page.Content = panel;
         _status.Text = "";
+    }
+
+    /// <summary>項目のページの1行。タイトルと説明を左に、ボタンを右に並べる。</summary>
+    private static DockPanel ItemRow(string title, string detail, params Button[] buttons)
+    {
+        var text = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis },
+                new TextBlock { Text = detail, FontSize = 12, Opacity = 0.7, TextTrimming = TextTrimming.CharacterEllipsis },
+            },
+        };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var button in buttons)
+        {
+            actions.Children.Add(button);
+        }
+
+        var row = new DockPanel { Margin = new Thickness(0, 2) };
+        DockPanel.SetDock(actions, Dock.Right);
+        row.Children.Add(actions);
+        row.Children.Add(text);
+        return row;
     }
 
     /// <summary>失敗したら画面に出す。</summary>

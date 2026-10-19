@@ -1,12 +1,14 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using System.Text.Json.Nodes;
 using Chuo.Core.Settings;
+using Chuo.Core.Text;
 using Microsoft.Extensions.Logging;
 
 namespace Chuo.Core.Items;
 
 /// <summary>
-/// 項目ごとのユーザー設定（お気に入り、無視）を <c>items.json</c> に保存する（要件定義書 6 章、設計 6 章）。
+/// 項目ごとのユーザー設定（エイリアス、お気に入り、無視）を <c>items.json</c> に保存する（要件定義書 6 章、設計 6 章）。
 /// キーは項目のグローバルな識別子（<c>&lt;pluginId&gt;:&lt;itemId&gt;</c>）。
 /// 検索のスレッドからは <see cref="Current"/> の不変のスナップショットを読む。
 /// ファイルを手で編集したときは、自動で読み直す。
@@ -15,6 +17,7 @@ public sealed class ItemPreferences : IDisposable
 {
     public const string FavoriteKey = "favorite";
     public const string IgnoreKey = "ignore";
+    public const string AliasesKey = "aliases";
 
     /// <summary>エディタの保存は書き込みが続くことがあるので、落ち着いてから読み直す。</summary>
     private static readonly TimeSpan ReloadDelay = TimeSpan.FromMilliseconds(300);
@@ -94,6 +97,26 @@ public sealed class ItemPreferences : IDisposable
             }
         });
 
+    /// <summary>
+    /// エイリアスを置き換える。前後の空白を除き、空のものと重複（大文字と小文字は区別しない）は捨てる。
+    /// 1つもなければキーを消す。
+    /// </summary>
+    public void SetAliases(string globalId, IEnumerable<string> aliases)
+    {
+        var cleaned = aliases.Select(a => a.Trim()).Where(a => a.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        Update(globalId, entry =>
+        {
+            if (cleaned.Count == 0)
+            {
+                entry.Remove(AliasesKey);
+            }
+            else
+            {
+                entry[AliasesKey] = new JsonArray([.. cleaned.Select(a => (JsonNode)JsonValue.Create(a))]);
+            }
+        });
+    }
+
     private void Update(string globalId, Action<JsonObject> change)
     {
         lock (_gate)
@@ -154,12 +177,15 @@ public sealed class ItemPreferences : IDisposable
 /// <summary>ある時点の、項目ごとのユーザー設定。</summary>
 public sealed class ItemPreferenceSnapshot
 {
-    public static ItemPreferenceSnapshot Empty { get; } = new(FrozenDictionary<string, int>.Empty, FrozenSet<string>.Empty);
+    public static ItemPreferenceSnapshot Empty { get; } =
+        new(FrozenDictionary<string, int>.Empty, FrozenSet<string>.Empty, FrozenDictionary<string, ImmutableArray<ItemAlias>>.Empty);
 
-    private ItemPreferenceSnapshot(FrozenDictionary<string, int> favorites, FrozenSet<string> ignored)
+    private ItemPreferenceSnapshot(
+        FrozenDictionary<string, int> favorites, FrozenSet<string> ignored, FrozenDictionary<string, ImmutableArray<ItemAlias>> aliases)
     {
         Favorites = favorites;
         Ignored = ignored;
+        Aliases = aliases;
         FavoritesInOrder = [.. favorites.OrderBy(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Key)];
     }
 
@@ -172,6 +198,11 @@ public sealed class ItemPreferenceSnapshot
     /// <summary>無視する項目の、グローバルな識別子。</summary>
     public FrozenSet<string> Ignored { get; }
 
+    /// <summary>エイリアスを持つ項目の、グローバルな識別子とエイリアス。</summary>
+    public FrozenDictionary<string, ImmutableArray<ItemAlias>> Aliases { get; }
+
+    public ImmutableArray<ItemAlias> AliasesOf(string globalId) => Aliases.GetValueOrDefault(globalId, []);
+
     public bool IsFavorite(string globalId) => Favorites.ContainsKey(globalId);
 
     public bool IsIgnored(string globalId) => Ignored.Contains(globalId);
@@ -180,6 +211,7 @@ public sealed class ItemPreferenceSnapshot
     {
         var favorites = new Dictionary<string, int>(StringComparer.Ordinal);
         var ignored = new HashSet<string>(StringComparer.Ordinal);
+        var aliases = new Dictionary<string, ImmutableArray<ItemAlias>>(StringComparer.Ordinal);
         foreach (var (id, node) in root)
         {
             if (node is not JsonObject entry)
@@ -194,7 +226,27 @@ public sealed class ItemPreferenceSnapshot
             {
                 ignored.Add(id);
             }
+            if (entry[ItemPreferences.AliasesKey] is JsonArray array)
+            {
+                var values = array.OfType<JsonValue>()
+                    .Select(v => v.TryGetValue<string>(out var text) ? text.Trim() : "")
+                    .Where(text => text.Length > 0)
+                    .Select(text => new ItemAlias(text, TextNormalizer.Normalize(text)))
+                    .ToImmutableArray();
+                if (values.Length > 0)
+                {
+                    aliases[id] = values;
+                }
+            }
         }
-        return new ItemPreferenceSnapshot(favorites.ToFrozenDictionary(StringComparer.Ordinal), ignored.ToFrozenSet(StringComparer.Ordinal));
+        return new ItemPreferenceSnapshot(
+            favorites.ToFrozenDictionary(StringComparer.Ordinal),
+            ignored.ToFrozenSet(StringComparer.Ordinal),
+            aliases.ToFrozenDictionary(StringComparer.Ordinal));
     }
 }
+
+/// <summary>項目のエイリアス。</summary>
+/// <param name="Text">ユーザーが付けたもの。</param>
+/// <param name="Normalized">検索の入力と比べるために正規化したもの。</param>
+public sealed record ItemAlias(string Text, string Normalized);

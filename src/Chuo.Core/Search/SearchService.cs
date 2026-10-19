@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Chuo.Abstractions;
 using Chuo.Core.Items;
@@ -27,7 +28,7 @@ public sealed record SearchResult(ResultItem Item, string PluginId, int Score)
 
 /// <summary>
 /// 入力に応じて、カタログ型とライブクエリ型のプロバイダから結果を集めて順位を付ける（設計 3 章）。
-/// お気に入りは加点し、無視した項目は除く（要件定義書 6 章）。
+/// エイリアスとお気に入りは加点し、無視した項目は除く（要件定義書 3.2、6 章）。
 /// </summary>
 public sealed class SearchService(
     ProviderRegistry registry, IOptionsMonitor<ChuoSettings> settings, ILogger<SearchService> logger, ItemPreferences? preferences = null)
@@ -39,6 +40,12 @@ public sealed class SearchService(
     /// お気に入りへの加点。連続した一致の減点（最大でおよそ 600）より大きくし、一致の度合いが近ければお気に入りが上に来るようにする。
     /// </summary>
     internal const int FavoriteBonus = 5_000;
+
+    /// <summary>エイリアスの前方一致への加点。お気に入りより大きくする（要件定義書 3.2）。</summary>
+    internal const int AliasPrefixBonus = 50_000;
+
+    /// <summary>エイリアスの完全一致の点。これ以上の点の項目は、ライブクエリの結果より上に固定する。</summary>
+    internal const int AliasExactScore = 1_000_000;
 
     /// <summary>
     /// 検索する。UI スレッドを止めないよう、処理はスレッドプールで行う。
@@ -90,11 +97,15 @@ public sealed class SearchService(
         var catalogResults = SearchCatalogs(catalogs, TextNormalizer.Normalize(catalogPattern.Trim()), preference, limit, cancellationToken);
         var liveResults = (await liveTask).Where(r => !preference.IsIgnored(r.GlobalId));
 
-        // ライブクエリの結果は、明示的に呼び出したもの（キーワードかグローバルトリガー）なので上に置く
-        // 項目の補完はキーワードを含まないので、入力欄の文字列にするためにキーワードの部分を前に付ける
+        // エイリアスの完全一致は最上位に固定する。ライブクエリの結果は、明示的に呼び出したもの（キーワードかグローバルトリガー）なので
+        // その次に置く
+        // 補完はキーワードを含まないので、入力欄の文字列にするためにキーワードの部分を前に付ける
         var completionPrefix = text[..^catalogPattern.Length];
-        return [.. liveResults.Concat(catalogResults).Take(limit)
-            .Select(r => r.Item.Completion is { } completion ? r with { Completion = completionPrefix + completion } : r)];
+        return [.. catalogResults.TakeWhile(r => r.Score >= AliasExactScore)
+            .Concat(liveResults)
+            .Concat(catalogResults.SkipWhile(r => r.Score >= AliasExactScore))
+            .Take(limit)
+            .Select(r => (r.Completion ?? r.Item.Completion) is { } completion ? r with { Completion = completionPrefix + completion } : r)];
     }
 
     /// <summary>
@@ -164,16 +175,30 @@ public sealed class SearchService(
         {
             foreach (var item in registration.Catalog.Snapshot())
             {
+                var globalId = $"{registration.PluginId}:{item.Item.Id}";
+                var alias = MatchAlias(preference.AliasesOf(globalId), pattern);
                 if (item.Score(pattern) is not { } score)
                 {
-                    continue;
+                    if (alias is null)
+                    {
+                        continue;
+                    }
+                    score = 0;
                 }
-                var result = new SearchResult(item.Item, registration.PluginId, score);
-                if (preference.IsIgnored(result.GlobalId))
+                if (preference.IsIgnored(globalId))
                 {
                     continue;
                 }
-                results.Add(preference.IsFavorite(result.GlobalId) ? result with { Score = score + FavoriteBonus } : result);
+                if (alias is not null)
+                {
+                    // 前方一致は、補った文字が少ないエイリアスほど上にする。補完にはエイリアスを出す
+                    score = alias.Normalized == pattern ? AliasExactScore : AliasPrefixBonus + score - (alias.Normalized.Length - pattern.Length);
+                }
+                if (preference.IsFavorite(globalId))
+                {
+                    score += FavoriteBonus;
+                }
+                results.Add(new SearchResult(item.Item, registration.PluginId, score) { Completion = alias?.Text });
             }
             cancellationToken.ThrowIfCancellationRequested();
         }
@@ -183,6 +208,28 @@ public sealed class SearchService(
             .ThenBy(r => r.Item.Title, StringComparer.CurrentCulture)
             .Take(limit)
             .ToList();
+    }
+
+    /// <summary>入力と完全に一致するエイリアス、なければ入力で始まる最も短いエイリアス。</summary>
+    private static ItemAlias? MatchAlias(ImmutableArray<ItemAlias> aliases, string pattern)
+    {
+        if (aliases.IsDefaultOrEmpty || pattern.Length == 0)
+        {
+            return null;
+        }
+        ItemAlias? best = null;
+        foreach (var alias in aliases)
+        {
+            if (alias.Normalized == pattern)
+            {
+                return alias;
+            }
+            if (alias.Normalized.StartsWith(pattern, StringComparison.Ordinal) && (best is null || alias.Normalized.Length < best.Normalized.Length))
+            {
+                best = alias;
+            }
+        }
+        return best;
     }
 
     private async Task<List<SearchResult>> QueryLiveAsync(
