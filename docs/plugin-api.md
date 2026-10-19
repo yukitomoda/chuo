@@ -68,7 +68,7 @@ public sealed class ClipboardPlugin : IChuoPlugin
 | `IconSource` | ファイルのアイコン（今は Windows のみ）、画像ファイル、画像のバイト列 |
 | `ItemAction` | タイトルと実行する処理。`Open`、`ShowInFolder`、`CopyText`、`RunAsAdministrator`（Windows のみ）のヘルパーがある |
 | `ItemActionKind` | 標準のアクションの種類。ホストが種類ごとにキーを割り当てる（`RunAsAdministrator` は Ctrl+Shift+Enter）。`None` のアクションは並びの位置でキーが決まる（1つめは Enter、2つめは Ctrl+Enter） |
-| `ActionResult` | 実行後の動作：閉じる（`Close`）、開いたままにする（`KeepOpen`）、入力を置き換える（`SetQuery`） |
+| `ActionResult` | 実行後の動作：閉じる（`Close`）、開いたままにする（`KeepOpen`）、入力を置き換える（`SetQuery`。入力が同じでも検索し直すので、一覧の作り直しにも使える） |
 | `Preview` | テキスト、画像、ファイル、プロパティの一覧 |
 
 - `Completion` は Tab で補完したときの検索の文字列で、キーワードは含めない（例：ファイル検索で `C:\Us` に対して `C:\Users\`）。ホストは、選んでいる項目の補完が入力で始まっていれば、続きを薄く表示する。同梱のアプリとショートカットのプラグインは、タイトルを補完にしている。

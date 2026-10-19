@@ -2,6 +2,7 @@
   <Folder Name="/plugins/">
     <Project Path="plugins/Chuo.Plugins.Apps/Chuo.Plugins.Apps.csproj" />
     <Project Path="plugins/Chuo.Plugins.Calculator/Chuo.Plugins.Calculator.csproj" />
+    <Project Path="plugins/Chuo.Plugins.DailyFolder/Chuo.Plugins.DailyFolder.csproj" />
     <Project Path="plugins/Chuo.Plugins.Shortcuts/Chuo.Plugins.Shortcuts.csproj" />
     <Project Path="plugins/Chuo.Plugins.WebSearch/Chuo.Plugins.WebSearch.csproj" />
   </Folder>

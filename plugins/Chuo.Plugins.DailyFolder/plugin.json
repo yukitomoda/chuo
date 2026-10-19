@@ -1,0 +1,7 @@
+{
+  "id": "chuo.dailyfolder",
+  "name": "Daily Folder",
+  "version": "1.0.0",
+  "entry": "Chuo.Plugins.DailyFolder.dll",
+  "hostApi": "1.2"
+}

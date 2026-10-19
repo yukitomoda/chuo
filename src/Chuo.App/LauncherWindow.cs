@@ -505,8 +505,14 @@ public sealed class LauncherWindow : Window
                 HideLauncher();
                 break;
             case ActionResult.SetQueryResult setQuery:
+                var unchanged = _input.Text == setQuery.Text;
                 _input.Text = setQuery.Text;
                 _input.CaretIndex = setQuery.Text.Length;
+                if (unchanged)
+                {
+                    // 入力が同じでも、アクションで結果が変わった（保持の切り替えなど）ので検索し直す。選んでいた位置は保つ
+                    OnInputChanged(Math.Max(0, _results.SelectedIndex));
+                }
                 break;
         }
     }
