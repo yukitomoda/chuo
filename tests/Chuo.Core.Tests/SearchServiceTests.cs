@@ -68,6 +68,35 @@ public class SearchServiceTests
     }
 
     [Fact]
+    public async Task 補完にはキーワードの部分を前に付ける()
+    {
+        var catalog = new ProviderCatalog();
+        catalog.ReplaceAll([new CatalogItem { Id = "users", Title = @"C:\Users", Completion = @"C:\Users\" }]);
+        _registry.Add(new CatalogRegistration("files", "Test", catalog, "f", true));
+        var service = CreateService();
+
+        var keyword = Assert.Single(await service.SearchAsync(@"f c:\us", TestContext.Current.CancellationToken));
+        var global = Assert.Single(await service.SearchAsync(@"c:\us", TestContext.Current.CancellationToken));
+
+        Assert.Equal(@"f C:\Users\", keyword.Completion);
+        Assert.Equal(@"C:\Users\", global.Completion);
+    }
+
+    [Theory]
+    [InlineData("vis", "ual Studio Code")]
+    [InlineData("VIS", "ual Studio Code")]
+    [InlineData("", "Visual Studio Code")]
+    [InlineData("code", null)]
+    [InlineData("Visual Studio Code", null)]
+    [InlineData("Visual Studio Code Insiders", null)]
+    public void 補完の続きは補完が入力で始まるときだけ出す(string input, string? expected)
+    {
+        var result = new SearchResult(new ResultItem { Id = "code", Title = "Code" }, "apps", 0) { Completion = "Visual Studio Code" };
+
+        Assert.Equal(expected, result.CompletionSuffix(input));
+    }
+
+    [Fact]
     public async Task 時間内に返さないライブクエリは結果に含めない()
     {
         _registry.Add(new LiveQueryRegistration("slow", "Slow", new SlowProvider(), "s", null, TimeSpan.FromMilliseconds(50)));

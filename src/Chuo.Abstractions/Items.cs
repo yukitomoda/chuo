@@ -17,6 +17,12 @@ public class ResultItem
 
     /// <summary>プレビューを取得する処理。項目が選択されたときに初めて呼ばれる。プレビューがなければ null。</summary>
     public Func<CancellationToken, Task<Preview>>? Preview { get; init; }
+
+    /// <summary>
+    /// Tab で補完したときの検索の文字列（キーワードは含めない）。項目を選んでいて、これが入力で始まっていれば、
+    /// ホストが入力欄に続きを薄く表示する。補完しない項目は null。
+    /// </summary>
+    public string? Completion { get; init; }
 }
 
 /// <summary>カタログ型のプロバイダが登録する項目。</summary>

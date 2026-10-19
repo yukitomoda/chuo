@@ -12,6 +12,17 @@ public sealed record SearchResult(ResultItem Item, string PluginId, int Score)
 {
     /// <summary>使用履歴やお気に入りで使う、グローバルな識別子（<c>&lt;pluginId&gt;:&lt;itemId&gt;</c>）。</summary>
     public string GlobalId => $"{PluginId}:{Item.Id}";
+
+    /// <summary>Tab で補完したときの入力欄の文字列。項目の補完に、検索で使ったキーワードを前に付けたもの。</summary>
+    public string? Completion { get; init; }
+
+    /// <summary>
+    /// 入力欄に薄く表示する補完の続き。補完が入力で始まっていなければ（大文字と小文字は区別しない）null。
+    /// </summary>
+    public string? CompletionSuffix(string input) =>
+        Completion is { } completion && completion.Length > input.Length && completion.StartsWith(input, StringComparison.OrdinalIgnoreCase)
+            ? completion[input.Length..]
+            : null;
 }
 
 /// <summary>
@@ -80,7 +91,10 @@ public sealed class SearchService(
         var liveResults = (await liveTask).Where(r => !preference.IsIgnored(r.GlobalId));
 
         // ライブクエリの結果は、明示的に呼び出したもの（キーワードかグローバルトリガー）なので上に置く
-        return [.. liveResults.Concat(catalogResults).Take(limit)];
+        // 項目の補完はキーワードを含まないので、入力欄の文字列にするためにキーワードの部分を前に付ける
+        var completionPrefix = text[..^catalogPattern.Length];
+        return [.. liveResults.Concat(catalogResults).Take(limit)
+            .Select(r => r.Item.Completion is { } completion ? r with { Completion = completionPrefix + completion } : r)];
     }
 
     /// <summary>

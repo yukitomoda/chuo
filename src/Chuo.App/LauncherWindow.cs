@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
@@ -38,6 +39,8 @@ public sealed class LauncherWindow : Window
     private readonly ILogger<LauncherWindow> _logger;
     private readonly TextBox _input;
     private readonly ListBox _results;
+    private readonly TextBlock _completionHint;
+    private TextPresenter? _inputPresenter;
     private CancellationTokenSource? _searchCancellation;
     private bool _prewarming;
     private bool _hiding;
@@ -72,7 +75,21 @@ public sealed class LauncherWindow : Window
             FontSize = 22,
             Margin = new Thickness(12),
         };
-        _input.TextChanged += (_, _) => OnInputChanged();
+        _input.TextChanged += (_, _) =>
+        {
+            OnInputChanged();
+            UpdateCompletionHint();
+        };
+        _input.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBox.CaretIndexProperty || e.Property == TextBox.SelectionStartProperty
+                || e.Property == TextBox.SelectionEndProperty)
+            {
+                UpdateCompletionHint();
+            }
+        };
+        _completionHint = new TextBlock { Opacity = 0.4, IsHitTestVisible = false, IsVisible = false };
+        _input.TemplateApplied += (_, e) => AttachCompletionHint(e.NameScope.Find<TextPresenter>("PART_TextPresenter"));
 
         _results = new ListBox
         {
@@ -91,6 +108,7 @@ public sealed class LauncherWindow : Window
             }
         }, RoutingStrategies.Bubble, handledEventsToo: true);
         _results.ContextRequested += OnResultContextRequested;
+        _results.SelectionChanged += (_, _) => UpdateCompletionHint();
 
         Content = new StackPanel { Children = { _input, _results } };
 
@@ -201,6 +219,69 @@ public sealed class LauncherWindow : Window
                     _integration.TrimMemory();
                 }
             }, DispatcherPriority.Background);
+        }
+    }
+
+    /// <summary>
+    /// 補完の続きを、入力欄の文字と同じ位置に重ねて表示する。入力欄のテンプレートの中で文字を描く TextPresenter の隣に置き、
+    /// 位置、フォント、横のスクロールをそろえる。
+    /// </summary>
+    private void AttachCompletionHint(TextPresenter? presenter)
+    {
+        (_completionHint.Parent as Panel)?.Children.Remove(_completionHint);
+        _inputPresenter = presenter;
+        if (presenter?.Parent is not Panel panel)
+        {
+            _logger.LogWarning("入力欄のテンプレートに補完を表示する場所がない");
+            return;
+        }
+        _completionHint.HorizontalAlignment = presenter.HorizontalAlignment;
+        _completionHint.VerticalAlignment = presenter.VerticalAlignment;
+        _completionHint.Margin = presenter.Margin;
+        panel.Children.Insert(panel.Children.IndexOf(presenter), _completionHint);
+        presenter.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextPresenter.PreeditTextProperty)
+            {
+                UpdateCompletionHint();
+            }
+        };
+    }
+
+    /// <summary>選んでいる項目の補完の続き。カーソルが末尾にあり、範囲を選んでおらず、IME で変換していないときだけ出す。</summary>
+    private string? CompletionSuffix()
+    {
+        var text = _input.Text ?? "";
+        return _results.SelectedItem is SearchResult result
+            && _input.SelectionStart == _input.SelectionEnd && _input.CaretIndex == text.Length
+            && string.IsNullOrEmpty(_inputPresenter?.PreeditText)
+                ? result.CompletionSuffix(text)
+                : null;
+    }
+
+    private void UpdateCompletionHint()
+    {
+        if (CompletionSuffix() is not { } suffix)
+        {
+            _completionHint.IsVisible = false;
+            return;
+        }
+        // 入力した部分は透明にして幅だけを取り、続きを入力の後ろにそろえる
+        _completionHint.Inlines =
+        [
+            new Run(_input.Text) { Foreground = Brushes.Transparent },
+            new Run(suffix),
+        ];
+        _completionHint.IsVisible = true;
+    }
+
+    /// <summary>選んでいる項目の補完を入力欄に入れる。</summary>
+    private void AcceptCompletion()
+    {
+        if (CompletionSuffix() is not null && _results.SelectedItem is SearchResult { Completion: { } completion })
+        {
+            _input.Text = completion;
+            _input.CaretIndex = completion.Length;
         }
     }
 
@@ -362,6 +443,10 @@ public sealed class LauncherWindow : Window
             case Key.Delete when e.KeyModifiers == KeyModifiers.Control && _results.SelectedItem is SearchResult ignored:
                 // 無視と、その解除（要件定義書 6.3）
                 ToggleIgnored(ignored);
+                break;
+            case Key.Tab when e.KeyModifiers == KeyModifiers.None:
+                // Tab は補完だけに使う。補完がないときも、フォーカスを入力欄から移さない（要件定義書 8 章）
+                AcceptCompletion();
                 break;
             case Key.OemComma when e.KeyModifiers == KeyModifiers.Control:
                 // 設定画面を開く（要件定義書 9.1）

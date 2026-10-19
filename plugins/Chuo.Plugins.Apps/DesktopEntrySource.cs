@@ -92,6 +92,7 @@ internal sealed class DesktopEntrySource : IAppSource
         {
             Id = id,
             Title = title,
+            Completion = title,
             Subtitle = entry.GetLocalized("Comment", _locale) ?? entry.GetLocalized("GenericName", _locale),
             Icon = icon is null ? null : _icons.Find(icon),
             Keywords = keywords,

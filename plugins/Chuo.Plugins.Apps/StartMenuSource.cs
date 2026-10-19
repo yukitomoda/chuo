@@ -72,6 +72,7 @@ internal sealed class StartMenuSource : IAppSource
             Id = path,
             Title = title,
             Subtitle = target ?? path,
+            Completion = title,
             Icon = IconSource.FromFile(path),
             Keywords = keywords,
             Actions = actions,
@@ -85,6 +86,7 @@ internal sealed class StartMenuSource : IAppSource
         {
             Id = app.AppUserModelId,
             Title = app.Name,
+            Completion = app.Name,
             Subtitle = app.PackageName,
             Icon = IconSource.FromFile(location),
             Actions = [ItemAction.Open(location, "起動")],

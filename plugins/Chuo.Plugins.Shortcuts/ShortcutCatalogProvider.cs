@@ -154,6 +154,7 @@ public sealed class ShortcutCatalogProvider(IOptionsMonitor<ShortcutsOptions> op
             Id = path,
             Title = title,
             Subtitle = target ?? path,
+            Completion = title,
             Icon = IconSource.FromFile(path),
             Keywords = keywords,
             Actions = actions,
@@ -173,10 +174,12 @@ public sealed class ShortcutCatalogProvider(IOptionsMonitor<ShortcutsOptions> op
             return null;
         }
         var locale = Environment.GetEnvironmentVariable("LANG");
+        var title = entry.GetLocalized("Name", locale) ?? Path.GetFileNameWithoutExtension(path);
         return new CatalogItem
         {
             Id = path,
-            Title = entry.GetLocalized("Name", locale) ?? Path.GetFileNameWithoutExtension(path),
+            Title = title,
+            Completion = title,
             Subtitle = entry.GetLocalized("Comment", locale) ?? path,
             Actions =
             [
@@ -195,6 +198,7 @@ public sealed class ShortcutCatalogProvider(IOptionsMonitor<ShortcutsOptions> op
         {
             Id = path,
             Title = Path.GetFileNameWithoutExtension(path),
+            Completion = Path.GetFileNameWithoutExtension(path),
             Subtitle = path,
             Actions =
             [
