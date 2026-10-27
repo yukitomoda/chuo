@@ -50,6 +50,9 @@ public sealed class DailyFolders(IOptionsMonitor<DailyFolderOptions> options, Ke
         return [.. List().Where(d => d.Date < oldest && !d.Kept)];
     }
 
+    /// <summary>今日より前のフォルダを、新しい順に <paramref name="count"/> 件まで返す。</summary>
+    public IReadOnlyList<DailyFolderEntry> Recent(int count) => [.. List().Where(d => d.Date < Today).Take(count)];
+
     public bool ToggleKept(string name) => kept.Toggle(name);
 }
 

@@ -51,6 +51,14 @@ public sealed class DailyFolderTests : IDisposable
     }
 
     [Fact]
+    public void 直近のフォルダは今日を除いて新しい順に指定の数まで()
+    {
+        Create("2026-10-20", "2026-10-19", "2026-10-18", "2026-10-15", "2026-10-01");
+
+        Assert.Equal(["2026-10-18", "2026-10-15"], _folders.Recent(2).Select(f => f.Name));
+    }
+
+    [Fact]
     public void 残す日数より古く保持していないフォルダを削除の対象にする()
     {
         // 残す日数は 7 なので、10-13 から今日（10-19）までは残す

@@ -5,7 +5,7 @@ namespace Chuo.Plugins.DailyFolder;
 
 /// <summary>
 /// キーワードの後のサブコマンドで操作する。
-/// 何も付けなければ今日のフォルダ、<c>prune</c> で古いフォルダの削除、<c>keep</c> で削除しないフォルダの指定。
+/// 何も付けなければ今日のフォルダと直近のフォルダ、<c>prune</c> で古いフォルダの削除、<c>keep</c> で削除しないフォルダの指定。
 /// </summary>
 [LiveQueryProvider(Keyword = "daily")]
 public sealed class DailyFolderCommands : ILiveQueryProvider
@@ -13,13 +13,16 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
     private const string Prune = "prune";
     private const string Keep = "keep";
 
+    /// <summary>キーワードだけのときに出す、今日より前のフォルダの数。</summary>
+    private const int RecentCount = 5;
+
     private readonly DailyFolders _folders;
     private readonly ILogger<DailyFolderCommands> _logger;
 
-    /// <summary>直前の prune で移せなかったフォルダの知らせ。次に prune の一覧を出すときに一度だけ出す。</summary>
-    private PruneError? _pruneError;
+    /// <summary>直前にごみ箱に移せなかったフォルダの知らせ。次に一覧を出すときに一度だけ先頭に出す。</summary>
+    private TrashError? _trashError;
 
-    private sealed record PruneError(string Title, string Detail);
+    private sealed record TrashError(string Title, string Detail);
 
     public DailyFolderCommands(DailyFolders folders, ILogger<DailyFolderCommands> logger)
     {
@@ -53,12 +56,13 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
             return ValueTask.FromResult(ActionResult.Close);
         });
 
-    /// <summary>今日のフォルダと、入力に合うサブコマンド。</summary>
+    /// <summary>今日のフォルダ、直近のフォルダと、入力に合うサブコマンド。</summary>
     private List<ResultItem> CommandItems(string prefix, string text)
     {
         var items = new List<ResultItem>();
         if (text.Length == 0)
         {
+            TakeTrashError(items);
             items.Add(new ResultItem
             {
                 Id = "today",
@@ -66,6 +70,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
                 Subtitle = _folders.TodayPath,
                 Actions = [OpenToday(_folders), ItemAction.CopyText(_folders.TodayPath, "パスをコピー")],
             });
+            items.AddRange(_folders.Recent(RecentCount).Select(folder => RecentItem(folder, prefix)));
         }
         (string Name, string Description)[] commands =
         [
@@ -92,10 +97,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
         var candidates = _folders.PruneCandidates();
         var refresh = prefix + Prune + " ";
         var items = new List<ResultItem>();
-        if (Interlocked.Exchange(ref _pruneError, null) is { } error)
-        {
-            items.Add(new ResultItem { Id = "prune:error", Title = error.Title, Subtitle = error.Detail });
-        }
+        TakeTrashError(items);
         if (candidates.Count == 0)
         {
             items.Add(new ResultItem
@@ -116,7 +118,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
                 [
                     new ItemAction("ごみ箱に移す", async ctx =>
                     {
-                        await PruneAsync(candidates, ctx.CancellationToken);
+                        await MoveToTrashAsync(candidates, ctx.CancellationToken);
                         return ActionResult.SetQuery(refresh);
                     }),
                 ],
@@ -156,6 +158,34 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
             Actions = [ItemAction.Open(folder.Path), ToggleKept(folder, refresh)],
         };
 
+    /// <summary>直近のフォルダの項目。Enter で開き、保持の切り替えとごみ箱に移すことはアクションパネルから選ぶ。</summary>
+    private ResultItem RecentItem(DailyFolderEntry folder, string refresh) =>
+        new()
+        {
+            Id = "folder:" + folder.Name,
+            Title = folder.Kept ? $"★ {folder.Name}" : folder.Name,
+            Subtitle = folder.Kept ? "保持中" : null,
+            Actions =
+            [
+                ItemAction.Open(folder.Path),
+                ToggleKept(folder, refresh),
+                new ItemAction("ごみ箱に移す", async ctx =>
+                {
+                    await MoveToTrashAsync([folder], ctx.CancellationToken);
+                    return ActionResult.SetQuery(refresh);
+                }),
+                ItemAction.CopyText(folder.Path, "パスをコピー"),
+            ],
+        };
+
+    private void TakeTrashError(List<ResultItem> items)
+    {
+        if (Interlocked.Exchange(ref _trashError, null) is { } error)
+        {
+            items.Add(new ResultItem { Id = "trash:error", Title = error.Title, Subtitle = error.Detail });
+        }
+    }
+
     private ItemAction ToggleKept(DailyFolderEntry folder, string refresh) =>
         new(folder.Kept ? "保持を解除する" : "保持する", _ =>
         {
@@ -163,7 +193,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
             return ValueTask.FromResult(ActionResult.SetQuery(refresh));
         });
 
-    private async Task PruneAsync(IReadOnlyList<DailyFolderEntry> candidates, CancellationToken cancellationToken)
+    private async Task MoveToTrashAsync(IReadOnlyList<DailyFolderEntry> candidates, CancellationToken cancellationToken)
     {
         var moved = 0;
         Exception? firstError = null;
@@ -173,6 +203,11 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
             {
                 await Trash.MoveAsync(folder.Path, cancellationToken);
                 moved++;
+                // 消したフォルダの保持は残さない（同じ名前のフォルダを後で作っても保持にならないように）
+                if (folder.Kept)
+                {
+                    _folders.ToggleKept(folder.Name);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -183,7 +218,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
         _logger.LogInformation("{Moved} / {Count} 件のフォルダをごみ箱に移した", moved, candidates.Count);
         if (firstError is not null)
         {
-            _pruneError = new PruneError($"{candidates.Count - moved} 件のフォルダをごみ箱に移せなかった", firstError.Message);
+            _trashError = new TrashError($"{candidates.Count - moved} 件のフォルダをごみ箱に移せなかった", firstError.Message);
         }
     }
 }
