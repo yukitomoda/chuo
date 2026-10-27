@@ -3,36 +3,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Chuo.Plugins.DailyFolder;
 
-/// <summary>全体検索で、今日のフォルダを開く項目を出す。</summary>
-[CatalogProvider(Title = "今日のフォルダ", IncludeInGlobal = true)]
-public sealed class DailyFolderCatalogProvider : ICatalogProvider
-{
-    private readonly DailyFolders _folders;
-
-    public DailyFolderCatalogProvider(DailyFolders folders) => _folders = folders;
-
-    public Task InitializeAsync(ICatalog catalog, CancellationToken cancellationToken)
-    {
-        catalog.ReplaceAll(
-        [
-            new CatalogItem
-            {
-                Id = "today",
-                Title = "Daily Folder",
-                Subtitle = "今日のフォルダを開く",
-                Keywords = ["今日のフォルダ"],
-                Actions = [DailyFolderCommands.OpenToday(_folders)],
-            },
-        ]);
-        return Task.CompletedTask;
-    }
-}
-
 /// <summary>
 /// キーワードの後のサブコマンドで操作する。
 /// 何も付けなければ今日のフォルダ、<c>prune</c> で古いフォルダの削除、<c>keep</c> で削除しないフォルダの指定。
 /// </summary>
-[LiveQueryProvider(Title = "コマンド", Keyword = "daily")]
+[LiveQueryProvider(Keyword = "daily")]
 public sealed class DailyFolderCommands : ILiveQueryProvider
 {
     private const string Prune = "prune";
@@ -54,8 +29,9 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
 
     public ValueTask<IReadOnlyList<ResultItem>> QueryAsync(Query query, CancellationToken cancellationToken)
     {
-        // サブコマンドの後で入力欄を書き換えるため、キーワードの部分（例: "daily "）を取っておく
-        var prefix = query.RawText[..^query.Text.Length];
+        // サブコマンドの後で入力欄を書き換えるため、キーワードの部分（例: "daily "）を作っておく。
+        // キーワードだけ（空白なし）の入力でも呼ばれるので、入力欄からは切り出さない
+        var prefix = query.Keyword + " ";
         var text = query.Text.TrimStart();
         var space = text.IndexOf(' ');
         var command = space < 0 ? text : text[..space];

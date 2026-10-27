@@ -36,6 +36,7 @@ public sealed class Calculator : ILiveQueryProvider { ... }
 | カタログ型 | `ICatalogProvider`（`InitializeAsync(ICatalog, CancellationToken)`） | `[CatalogProvider]`（`Title`、`Keyword`、`IncludeInGlobal`） |
 | ライブクエリ型 | `ILiveQueryProvider`（`QueryAsync(Query, CancellationToken)`） | `[LiveQueryProvider]`（`Title`、`Keyword`、`GlobalTrigger`、`TimeoutMs`） |
 
+- ライブクエリ型は、入力がキーワードだけ（空白なし）のときも `Text` を空にして呼ばれる。結果は全体検索の結果の上に出るので、空の入力で出すものがなければ空を返す。入力欄を書き換える `SetQuery` には、`RawText` ではなく `Keyword + " "` を前に付ける。
 - `Title` は設定画面に出す名前で、プラグインにプロバイダが複数あるときの見出しに使う。なければクラス名を出す。
 
 - ライブクエリ型を `IQueryProvider` としないのは、暗黙の using に含まれる `System.Linq.IQueryProvider` と名前が衝突するため。

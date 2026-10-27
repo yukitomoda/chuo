@@ -75,38 +75,46 @@ public sealed class SearchService(
         var (keyword, body) = SplitKeyword(text);
 
         IEnumerable<CatalogRegistration> catalogs;
-        List<(LiveQueryRegistration Registration, Query Query)> liveQueries;
+        List<(LiveQueryRegistration Registration, Query Query, string CompletionPrefix)> liveQueries;
         string catalogPattern;
         if (keyword is not null)
         {
             catalogs = registry.Catalogs.Where(r => registry.KeywordOf(r) == keyword);
-            liveQueries = registry.LiveQueries.Where(r => registry.KeywordOf(r) == keyword).Select(r => (r, new Query(text, body, keyword))).ToList();
+            liveQueries = registry.LiveQueries.Where(r => registry.KeywordOf(r) == keyword).Select(r => (r, new Query(text, body, keyword), text[..^body.Length])).ToList();
             catalogPattern = body;
         }
         else
         {
             catalogs = registry.Catalogs.Where(registry.IncludesInGlobal);
-            liveQueries = registry.LiveQueries
-                .Where(r => registry.IncludesInGlobal(r) && r.GlobalTrigger?.IsMatch(text) == true)
-                .Select(r => (r, new Query(text, text, null)))
-                .ToList();
+            // 入力がキーワードそのもの（空白なし）なら、そのライブクエリも空の検索で呼び、最初の一覧を混ぜる（要件定義書 2.1）
+            liveQueries = [.. registry.LiveQueries
+                .Select(r => registry.KeywordOf(r) == text
+                    ? (r, new Query(text, "", text), text + " ")
+                    : registry.IncludesInGlobal(r) && r.GlobalTrigger?.IsMatch(text) == true
+                        ? (r, new Query(text, text, null), "")
+                        : default((LiveQueryRegistration, Query, string)?))
+                .OfType<(LiveQueryRegistration, Query, string)>()];
             catalogPattern = text;
         }
 
         var liveTask = QueryLiveAsync(liveQueries, cancellationToken);
-        var catalogResults = SearchCatalogs(catalogs, TextNormalizer.Normalize(catalogPattern.Trim()), preference, limit, cancellationToken);
+        // 補完はキーワードを含まないので、入力欄の文字列にするためにキーワードの部分を前に付ける
+        var completionPrefix = text[..^catalogPattern.Length];
+        var catalogResults = SearchCatalogs(catalogs, TextNormalizer.Normalize(catalogPattern.Trim()), preference, limit, cancellationToken)
+            .Select(r => WithCompletion(r, completionPrefix))
+            .ToList();
         var liveResults = (await liveTask).Where(r => !preference.IsIgnored(r.GlobalId));
 
         // エイリアスの完全一致は最上位に固定する。ライブクエリの結果は、明示的に呼び出したもの（キーワードかグローバルトリガー）なので
         // その次に置く
-        // 補完はキーワードを含まないので、入力欄の文字列にするためにキーワードの部分を前に付ける
-        var completionPrefix = text[..^catalogPattern.Length];
         return [.. catalogResults.TakeWhile(r => r.Score >= AliasExactScore)
             .Concat(liveResults)
             .Concat(catalogResults.SkipWhile(r => r.Score >= AliasExactScore))
-            .Take(limit)
-            .Select(r => (r.Completion ?? r.Item.Completion) is { } completion ? r with { Completion = completionPrefix + completion } : r)];
+            .Take(limit)];
     }
+
+    private static SearchResult WithCompletion(SearchResult result, string prefix) =>
+        (result.Completion ?? result.Item.Completion) is { } completion ? result with { Completion = prefix + completion } : result;
 
     /// <summary>
     /// 無視した項目を出す。カタログにない項目（プラグインを外した、ライブクエリの結果など）は、識別子だけを出す。
@@ -233,14 +241,14 @@ public sealed class SearchService(
     }
 
     private async Task<List<SearchResult>> QueryLiveAsync(
-        List<(LiveQueryRegistration Registration, Query Query)> queries, CancellationToken cancellationToken)
+        List<(LiveQueryRegistration Registration, Query Query, string CompletionPrefix)> queries, CancellationToken cancellationToken)
     {
         if (queries.Count == 0)
         {
             return [];
         }
 
-        var tasks = queries.Select(q => QueryOneAsync(q.Registration, q.Query, cancellationToken)).ToList();
+        var tasks = queries.Select(q => QueryOneAsync(q.Registration, q.Query, q.CompletionPrefix, cancellationToken)).ToList();
         var results = new List<SearchResult>();
         foreach (var items in await Task.WhenAll(tasks))
         {
@@ -249,7 +257,8 @@ public sealed class SearchService(
         return results;
     }
 
-    private async Task<IEnumerable<SearchResult>> QueryOneAsync(LiveQueryRegistration registration, Query query, CancellationToken cancellationToken)
+    private async Task<IEnumerable<SearchResult>> QueryOneAsync(
+        LiveQueryRegistration registration, Query query, string completionPrefix, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(registration.Timeout);
@@ -258,7 +267,7 @@ public sealed class SearchService(
         {
             // プラグインが同期的に重い処理をしても検索全体を止めないよう、別のタスクで呼ぶ
             var items = await Task.Run(() => registration.Provider.QueryAsync(query, timeout.Token).AsTask(), timeout.Token);
-            return items.Select((item, i) => new SearchResult(item, registration.PluginId, -i));
+            return items.Select((item, i) => WithCompletion(new SearchResult(item, registration.PluginId, -i), completionPrefix));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

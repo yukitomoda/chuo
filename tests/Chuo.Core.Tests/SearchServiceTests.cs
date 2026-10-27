@@ -82,6 +82,30 @@ public class SearchServiceTests
         Assert.Equal(@"C:\Users\", global.Completion);
     }
 
+    [Fact]
+    public async Task キーワードだけを入力するとライブクエリの最初の一覧も上に出す()
+    {
+        AddCatalog("apps", null, true, "DeFrag");
+        var provider = new EchoProvider();
+        _registry.Add(new LiveQueryRegistration("daily", "Echo", provider, "df", null, TimeSpan.FromSeconds(1)));
+
+        var results = await CreateService().SearchAsync("df", TestContext.Current.CancellationToken);
+
+        Assert.Equal(["echo:", "DeFrag"], results.Select(r => r.Item.Title));
+        Assert.Equal(new Query("df", "", "df"), provider.LastQuery);
+        Assert.Equal("df next", results[0].Completion);
+    }
+
+    [Fact]
+    public async Task キーワードに一致しない入力ではキーワードだけのライブクエリを呼ばない()
+    {
+        var provider = new EchoProvider();
+        _registry.Add(new LiveQueryRegistration("daily", "Echo", provider, "df", null, TimeSpan.FromSeconds(1)));
+
+        Assert.Empty(await CreateService().SearchAsync("d", TestContext.Current.CancellationToken));
+        Assert.Null(provider.LastQuery);
+    }
+
     [Theory]
     [InlineData("vis", "ual Studio Code")]
     [InlineData("VIS", "ual Studio Code")]
@@ -137,7 +161,7 @@ public class SearchServiceTests
         public ValueTask<IReadOnlyList<ResultItem>> QueryAsync(Query query, CancellationToken cancellationToken)
         {
             LastQuery = query;
-            return ValueTask.FromResult<IReadOnlyList<ResultItem>>([new ResultItem { Id = "1", Title = $"echo:{query.Text}" }]);
+            return ValueTask.FromResult<IReadOnlyList<ResultItem>>([new ResultItem { Id = "1", Title = $"echo:{query.Text}", Completion = "next" }]);
         }
     }
 
