@@ -40,6 +40,9 @@ public sealed class LauncherWindow : Window
     private readonly TextBox _input;
     private readonly ListBox _results;
     private readonly TextBlock _completionHint;
+    private readonly TextBlock _panelTitle;
+    private readonly ListBox _panel;
+    private readonly StackPanel _panelArea;
     private TextPresenter? _inputPresenter;
     private CancellationTokenSource? _searchCancellation;
     private bool _prewarming;
@@ -78,6 +81,8 @@ public sealed class LauncherWindow : Window
         };
         _input.TextChanged += (_, _) =>
         {
+            // 打ち始めたらアクションパネルを閉じ、検索に戻る
+            ClosePanel();
             OnInputChanged();
             UpdateCompletionHint();
         };
@@ -111,7 +116,19 @@ public sealed class LauncherWindow : Window
         _results.ContextRequested += OnResultContextRequested;
         _results.SelectionChanged += (_, _) => UpdateCompletionHint();
 
-        Content = new StackPanel { Children = { _input, _results } };
+        _panelTitle = new TextBlock { FontSize = 13, Opacity = 0.6, Margin = new Thickness(16, 0, 16, 4), TextTrimming = TextTrimming.CharacterEllipsis };
+        _panel = new ListBox { ItemTemplate = CreatePanelEntryTemplate(), Margin = new Thickness(12, 0, 12, 12), Focusable = false };
+        AddSelectionStyles(_panel);
+        _panel.AddHandler(PointerReleasedEvent, (_, e) =>
+        {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+            {
+                ExecutePanelEntry();
+            }
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
+        _panelArea = new StackPanel { IsVisible = false, Children = { _panelTitle, _panel } };
+
+        Content = new StackPanel { Children = { _input, _results, _panelArea } };
 
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         Deactivated += (_, _) =>
@@ -194,6 +211,7 @@ public sealed class LauncherWindow : Window
         }
 
         _hiding = true;
+        ClosePanel();
         try
         {
             Hide();
@@ -386,22 +404,14 @@ public sealed class LauncherWindow : Window
         e.Handled = true;
 
         var menuItems = new List<Control>();
-        for (var i = 0; i < result.Item.Actions.Count; i++)
+        foreach (var entry in EntriesFor(result))
         {
-            var index = i;
-            var action = result.Item.Actions[i];
-            menuItems.Add(MenuItemFor(action.Title, ActionGesture(action, i), () => ExecuteSelected(index)));
+            if (entry.StartsGroup && menuItems.Count > 0)
+            {
+                menuItems.Add(new Separator());
+            }
+            menuItems.Add(MenuItemFor(entry.Title, entry.Gesture, entry.Execute));
         }
-        if (menuItems.Count > 0)
-        {
-            menuItems.Add(new Separator());
-        }
-        var preference = _preferences.Current;
-        menuItems.Add(MenuItemFor(
-            preference.IsFavorite(result.GlobalId) ? "お気に入りから外す" : "お気に入りに追加", "Ctrl+D", () => ToggleFavorite(result)));
-        menuItems.Add(MenuItemFor(
-            preference.IsIgnored(result.GlobalId) ? "無視を解除" : "無視する", "Ctrl+Delete", () => ToggleIgnored(result)));
-        menuItems.Add(MenuItemFor("エイリアスを設定…", "Ctrl+E", () => EditAliases(result)));
 
         var menu = new ContextMenu { ItemsSource = menuItems };
         menu.Opened += (_, _) => _menuOpen = true;
@@ -412,6 +422,97 @@ public sealed class LauncherWindow : Window
         };
         menu.Open(container);
     }
+
+    /// <summary>アクションパネルと右クリックのメニューの1行。</summary>
+    /// <param name="StartsGroup">前の行との間に区切りを入れる（項目のアクションと、ホストの操作の境目）。</param>
+    private sealed record PanelEntry(string Title, string? Gesture, Action Execute, bool StartsGroup = false);
+
+    /// <summary>項目のアクション（プラグインが決める）と、ホストがすべての項目に付ける操作（お気に入り、無視、エイリアス）。</summary>
+    private List<PanelEntry> EntriesFor(SearchResult result)
+    {
+        var entries = new List<PanelEntry>();
+        for (var i = 0; i < result.Item.Actions.Count; i++)
+        {
+            var index = i;
+            var action = result.Item.Actions[i];
+            entries.Add(new PanelEntry(action.Title, ActionGesture(action, i), () => ExecuteSelected(index)));
+        }
+        var preference = _preferences.Current;
+        entries.Add(new PanelEntry(
+            preference.IsFavorite(result.GlobalId) ? "お気に入りから外す" : "お気に入りに追加", "Ctrl+D", () => ToggleFavorite(result), StartsGroup: true));
+        entries.Add(new PanelEntry(
+            preference.IsIgnored(result.GlobalId) ? "無視を解除" : "無視する", "Ctrl+Delete", () => ToggleIgnored(result)));
+        entries.Add(new PanelEntry("エイリアスを設定…", "Ctrl+E", () => EditAliases(result)));
+        return entries;
+    }
+
+    private bool PanelOpen => _panelArea.IsVisible;
+
+    /// <summary>選んでいる項目のアクションパネルを、結果の一覧の代わりに出す（要件定義書 5.2）。</summary>
+    private void OpenPanel()
+    {
+        if (_results.SelectedItem is not SearchResult result)
+        {
+            return;
+        }
+        _panelTitle.Text = result.Item.Title;
+        _panel.ItemsSource = EntriesFor(result);
+        _panel.SelectedIndex = 0;
+        _results.IsVisible = false;
+        _panelArea.IsVisible = true;
+        _completionHint.IsVisible = false;
+    }
+
+    private void ClosePanel()
+    {
+        if (!PanelOpen)
+        {
+            return;
+        }
+        _panelArea.IsVisible = false;
+        _results.IsVisible = _results.ItemCount > 0;
+        UpdateCompletionHint();
+    }
+
+    /// <summary>パネルで選んでいる行を実行する。実行の前にパネルを閉じ、結果の一覧に戻しておく。</summary>
+    private void ExecutePanelEntry()
+    {
+        if (_panel.SelectedItem is PanelEntry entry)
+        {
+            ClosePanel();
+            entry.Execute();
+        }
+    }
+
+    private static FuncDataTemplate<PanelEntry> CreatePanelEntryTemplate() =>
+        new((entry, _) =>
+        {
+            var row = new DockPanel { Margin = new Thickness(4, 4) };
+            if (entry is null)
+            {
+                return row;
+            }
+            if (entry.Gesture is not null)
+            {
+                var key = new TextBlock { Text = entry.Gesture, FontSize = 12, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center };
+                DockPanel.SetDock(key, Dock.Right);
+                row.Children.Add(key);
+            }
+            row.Children.Add(new TextBlock { Text = entry.Title, FontSize = 15 });
+            if (!entry.StartsGroup)
+            {
+                return row;
+            }
+            // ホストの操作の前に区切りの線を引く
+            return new StackPanel
+            {
+                Children =
+                {
+                    new Border { Height = 1, Background = Brushes.Gray, Opacity = 0.3, Margin = new Thickness(0, 0, 0, 4) },
+                    row,
+                },
+            };
+        });
 
     private static MenuItem MenuItemFor(string header, string? gesture, Action execute)
     {
@@ -440,6 +541,12 @@ public sealed class LauncherWindow : Window
 
     private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
+        if (PanelOpen && OnPanelKeyDown(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         switch (e.Key)
         {
             case Key.Escape:
@@ -467,6 +574,10 @@ public sealed class LauncherWindow : Window
                 // 無視と、その解除（要件定義書 6.3）
                 ToggleIgnored(ignored);
                 break;
+            case Key.Right when e.KeyModifiers == KeyModifiers.None && CaretAtEnd() && _results.SelectedItem is not null:
+                // 入力の末尾で → を押すと、アクションパネルを開く（要件定義書 5.2）。それ以外ではカーソルを動かす
+                OpenPanel();
+                break;
             case Key.Tab when e.KeyModifiers == KeyModifiers.None:
                 // Tab は補完だけに使う。補完がないときも、フォーカスを入力欄から移さない（要件定義書 8 章）
                 AcceptCompletion();
@@ -486,15 +597,49 @@ public sealed class LauncherWindow : Window
         e.Handled = true;
     }
 
-    private void MoveSelection(int delta)
+    /// <summary>アクションパネルを開いている間のキー。処理したら true。それ以外のキー（Ctrl+D など）は通常どおり扱う。</summary>
+    private bool OnPanelKeyDown(KeyEventArgs e)
     {
-        var count = _results.ItemCount;
+        switch (e.Key)
+        {
+            case Key.Escape or Key.Left when e.KeyModifiers == KeyModifiers.None:
+                ClosePanel();
+                return true;
+            case Key.Down:
+                MoveSelection(_panel, 1);
+                return true;
+            case Key.Up:
+                MoveSelection(_panel, -1);
+                return true;
+            case Key.Enter when e.KeyModifiers == KeyModifiers.None:
+                ExecutePanelEntry();
+                return true;
+            case Key.Right or Key.Tab:
+                return true;
+            default:
+                // 修飾キーの付いた操作（Ctrl+D など）は、パネルを閉じてから通常どおり扱う
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                {
+                    ClosePanel();
+                }
+                return false;
+        }
+    }
+
+    private bool CaretAtEnd() =>
+        _input.CaretIndex == (_input.Text?.Length ?? 0) && _input.SelectionStart == _input.SelectionEnd;
+
+    private void MoveSelection(int delta) => MoveSelection(_results, delta);
+
+    private static void MoveSelection(ListBox list, int delta)
+    {
+        var count = list.ItemCount;
         if (count == 0)
         {
             return;
         }
-        _results.SelectedIndex = (_results.SelectedIndex + delta + count) % count;
-        _results.ScrollIntoView(_results.SelectedIndex);
+        list.SelectedIndex = (list.SelectedIndex + delta + count) % count;
+        list.ScrollIntoView(list.SelectedIndex);
     }
 
     /// <summary>選んでいる項目の、指定した種類のアクションを実行する。なければ何もしない。</summary>

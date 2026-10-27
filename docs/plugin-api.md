@@ -69,7 +69,7 @@ public sealed class ClipboardPlugin : IChuoPlugin
 | `ResultItem` | `Id`、`Title`、`Subtitle`、`Icon`、`Actions`、`Preview`、`Completion` |
 | `CatalogItem` | `ResultItem` に検索用の `Keywords` を加えたもの |
 | `IconSource` | ファイルのアイコン（今は Windows のみ）、画像ファイル、画像のバイト列 |
-| `ItemAction` | タイトルと実行する処理。`Open`、`ShowInFolder`、`CopyText`、`RunAsAdministrator`（Windows のみ）のヘルパーがある |
+| `ItemAction` | タイトルと実行する処理。項目の `Actions` に並べた順に、Enter、Ctrl+Enter に割り当たり、すべてアクションパネルと右クリックのメニューに出る。`Open`、`ShowInFolder`、`CopyText`、`RunAsAdministrator`（Windows のみ）のヘルパーがある |
 | `ItemActionKind` | 標準のアクションの種類。ホストが種類ごとにキーを割り当てる（`RunAsAdministrator` は Ctrl+Shift+Enter）。`None` のアクションは並びの位置でキーが決まる（1つめは Enter、2つめは Ctrl+Enter） |
 | `ActionResult` | 実行後の動作：閉じる（`Close`）、開いたままにする（`KeepOpen`）、入力を置き換える（`SetQuery`。入力が同じでも検索し直すので、一覧の作り直しにも使える） |
 | `Preview` | テキスト、画像、ファイル、プロパティの一覧 |
