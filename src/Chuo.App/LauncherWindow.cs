@@ -50,6 +50,8 @@ public sealed class LauncherWindow : Window
     private bool _hiding;
     private bool _menuOpen;
     private bool _dialogOpen;
+    /// <summary>押されている修飾キー。Ctrl+Shift の間、管理者として実行することを行の色で示すのに使う。</summary>
+    private KeyModifiers _heldModifiers;
 
     public LauncherWindow(
         SearchService search, IShell shell, IClipboard clipboard, ILauncherWindowIntegration integration, IconCache icons,
@@ -120,6 +122,7 @@ public sealed class LauncherWindow : Window
         {
             UpdateCompletionHint();
             ClearError();
+            UpdateAdminHighlight();
         };
         // アクションが失敗したことを知らせる1行（理由はログに書く）
         _error = new TextBlock { Foreground = Brushes.IndianRed, Margin = new Thickness(16, 0, 16, 8), IsVisible = false, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -139,8 +142,13 @@ public sealed class LauncherWindow : Window
         Content = new StackPanel { Children = { _input, _error, _results, _panelArea } };
 
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, (_, e) => TrackModifiers(e, pressed: true), RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(KeyUpEvent, (_, e) => TrackModifiers(e, pressed: false), RoutingStrategies.Tunnel, handledEventsToo: true);
         Deactivated += (_, _) =>
         {
+            // 離れている間に修飾キーを離しても KeyUp は来ないので、押していないことにする
+            _heldModifiers = KeyModifiers.None;
+            UpdateAdminHighlight();
             // 右クリックのメニューやダイアログを開いている間は、ウィンドウが非アクティブになっても隠さない
             if (!_prewarming && !_menuOpen && !_dialogOpen && IsVisible)
             {
@@ -455,6 +463,37 @@ public sealed class LauncherWindow : Window
         return entries;
     }
 
+    /// <summary>
+    /// 修飾キーの押し下げを追う。修飾キーそのものの KeyDown と KeyUp では、<see cref="KeyEventArgs.KeyModifiers"/> が
+    /// 押す前と後のどちらの状態かがプラットフォームで違うので、キーから足し引きする。
+    /// </summary>
+    private void TrackModifiers(KeyEventArgs e, bool pressed)
+    {
+        var modifiers = e.KeyModifiers;
+        var changed = e.Key switch
+        {
+            Key.LeftCtrl or Key.RightCtrl => KeyModifiers.Control,
+            Key.LeftShift or Key.RightShift => KeyModifiers.Shift,
+            Key.LeftAlt or Key.RightAlt => KeyModifiers.Alt,
+            Key.LWin or Key.RWin => KeyModifiers.Meta,
+            _ => KeyModifiers.None,
+        };
+        _heldModifiers = pressed ? modifiers | changed : modifiers & ~changed;
+        UpdateAdminHighlight();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift を押している間、選んでいる行の色を変え、Enter で管理者として実行することを示す。
+    /// その項目に管理者として実行するアクションがなければ変えない。
+    /// </summary>
+    private void UpdateAdminHighlight()
+    {
+        var active = _heldModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
+            && _results.SelectedItem is SearchResult result
+            && result.Item.Actions.Any(a => a.Kind == ItemActionKind.RunAsAdministrator);
+        _results.Classes.Set(AdminClass, active);
+    }
+
     private void ClearError() => _error.IsVisible = false;
 
     private bool PanelOpen => _panelArea.IsVisible;
@@ -705,6 +744,10 @@ public sealed class LauncherWindow : Window
     private const string SelectedBackgroundKey = "ChuoSelectedBackground";
     private const string SelectedPointerOverBackgroundKey = "ChuoSelectedPointerOverBackground";
     private const string PointerOverBackgroundKey = "ChuoPointerOverBackground";
+    private const string AdminBackgroundKey = "ChuoAdminBackground";
+
+    /// <summary>Ctrl+Shift を押していて、選んでいる行を管理者として実行できるときに一覧に付けるクラス。</summary>
+    private const string AdminClass = "admin";
 
     /// <summary>
     /// 選択している行の背景。Fluent の既定はアクセントの色が濃く文字が読みにくいので、明るい色にする。
@@ -717,12 +760,14 @@ public sealed class LauncherWindow : Window
             [SelectedBackgroundKey] = new SolidColorBrush(Color.Parse("#D3E8FB")),
             [SelectedPointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#C5E0F9")),
             [PointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#E6E6E6")),
+            [AdminBackgroundKey] = new SolidColorBrush(Color.Parse("#FCDDB4")),
         };
         list.Resources.ThemeDictionaries[ThemeVariant.Dark] = new ResourceDictionary
         {
             [SelectedBackgroundKey] = new SolidColorBrush(Color.Parse("#2F4F6F")),
             [SelectedPointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#375C80")),
             [PointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#3A3A3A")),
+            [AdminBackgroundKey] = new SolidColorBrush(Color.Parse("#6B4A1F")),
         };
 
         Style BackgroundStyle(Func<Selector?, Selector> state, string key) =>
@@ -736,6 +781,12 @@ public sealed class LauncherWindow : Window
         list.Styles.Add(BackgroundStyle(x => x!.Class(":selected"), SelectedBackgroundKey));
         list.Styles.Add(BackgroundStyle(x => x!.Class(":selected").Class(":pointerover"), SelectedPointerOverBackgroundKey));
         list.Styles.Add(BackgroundStyle(x => x!.Class(":selected").Class(":pressed"), SelectedPointerOverBackgroundKey));
+        // 管理者として実行するときの色（UAC の盾の色に寄せた橙）。ほかの状態より優先するので最後に置く
+        list.Styles.Add(new Style(x => x.OfType<ListBox>().Class(AdminClass).Descendant().OfType<ListBoxItem>().Class(":selected")
+            .Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters = { new Setter(ContentPresenter.BackgroundProperty, new DynamicResourceExtension(AdminBackgroundKey)) },
+        });
     }
 
     /// <summary>アイコン、タイトル、サブタイトルを並べる行のテンプレート。</summary>
