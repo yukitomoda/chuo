@@ -41,6 +41,7 @@ public sealed class LauncherWindow : Window
     private readonly ListBox _results;
     private readonly TextBlock _completionHint;
     private readonly TextBlock _panelTitle;
+    private readonly TextBlock _error;
     private readonly ListBox _panel;
     private readonly StackPanel _panelArea;
     private TextPresenter? _inputPresenter;
@@ -83,6 +84,7 @@ public sealed class LauncherWindow : Window
         {
             // 打ち始めたらアクションパネルを閉じ、検索に戻る
             ClosePanel();
+            ClearError();
             OnInputChanged();
             UpdateCompletionHint();
         };
@@ -114,7 +116,13 @@ public sealed class LauncherWindow : Window
             }
         }, RoutingStrategies.Bubble, handledEventsToo: true);
         _results.ContextRequested += OnResultContextRequested;
-        _results.SelectionChanged += (_, _) => UpdateCompletionHint();
+        _results.SelectionChanged += (_, _) =>
+        {
+            UpdateCompletionHint();
+            ClearError();
+        };
+        // アクションが失敗したことを知らせる1行（理由はログに書く）
+        _error = new TextBlock { Foreground = Brushes.IndianRed, Margin = new Thickness(16, 0, 16, 8), IsVisible = false, TextTrimming = TextTrimming.CharacterEllipsis };
 
         _panelTitle = new TextBlock { FontSize = 13, Opacity = 0.6, Margin = new Thickness(16, 0, 16, 4), TextTrimming = TextTrimming.CharacterEllipsis };
         _panel = new ListBox { ItemTemplate = CreatePanelEntryTemplate(), Margin = new Thickness(12, 0, 12, 12), Focusable = false };
@@ -128,7 +136,7 @@ public sealed class LauncherWindow : Window
         }, RoutingStrategies.Bubble, handledEventsToo: true);
         _panelArea = new StackPanel { IsVisible = false, Children = { _panelTitle, _panel } };
 
-        Content = new StackPanel { Children = { _input, _results, _panelArea } };
+        Content = new StackPanel { Children = { _input, _error, _results, _panelArea } };
 
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         Deactivated += (_, _) =>
@@ -212,6 +220,7 @@ public sealed class LauncherWindow : Window
 
         _hiding = true;
         ClosePanel();
+        ClearError();
         try
         {
             Hide();
@@ -446,6 +455,8 @@ public sealed class LauncherWindow : Window
         return entries;
     }
 
+    private void ClearError() => _error.IsVisible = false;
+
     private bool PanelOpen => _panelArea.IsVisible;
 
     /// <summary>選んでいる項目のアクションパネルを、結果の一覧の代わりに出す（要件定義書 5.2）。</summary>
@@ -668,6 +679,8 @@ public sealed class LauncherWindow : Window
         catch (Exception ex)
         {
             _logger.LogError(ex, "{Item} の「{Action}」に失敗した", result.GlobalId, action.Title);
+            _error.Text = $"「{action.Title}」に失敗した";
+            _error.IsVisible = true;
             return;
         }
 
