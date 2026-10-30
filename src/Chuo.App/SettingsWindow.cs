@@ -37,15 +37,17 @@ public sealed class SettingsWindow : Window
     private readonly SearchService _search;
     private readonly ItemPreferences _preferences;
     private readonly IAutoStart _autoStart;
+    private readonly UpdateService _updates;
     private readonly ListBox _pluginList;
     private readonly ContentControl _page = new();
     private readonly TextBlock _status = new() { Margin = new Thickness(16, 8), TextWrapping = TextWrapping.Wrap };
 
     public SettingsWindow(
         PluginManager plugins, IConfiguration configuration, SettingsStore store, IShell shell, IClipboard clipboard,
-        SearchService search, ItemPreferences preferences, IAutoStart autoStart, ILogger<SettingsWindow> logger)
+        SearchService search, ItemPreferences preferences, IAutoStart autoStart, UpdateService updates, ILogger<SettingsWindow> logger)
     {
         _autoStart = autoStart;
+        _updates = updates;
         _search = search;
         _preferences = preferences;
         _plugins = plugins;
@@ -171,6 +173,9 @@ public sealed class SettingsWindow : Window
             panel.Children.Add(CreateAutoStart());
         }
 
+        panel.Children.Add(SectionHeading("バージョン"));
+        panel.Children.Add(CreateUpdate());
+
         panel.Children.Add(SectionHeading("ウィンドウ"));
         var window = _configuration.GetSection(ChuoSettings.WindowSection);
         foreach (var field in SettingsSchema.Describe(typeof(WindowSettings)))
@@ -245,6 +250,43 @@ public sealed class SettingsWindow : Window
         panel.Children.Add(check);
         panel.Children.Add(other);
         return panel;
+    }
+
+    /// <summary>今の版と、更新の確認と実行（要件定義書 10 章）。インストーラーで入れたときだけ更新できる。</summary>
+    private Control CreateUpdate()
+    {
+        var version = new TextBlock { Text = _updates.CurrentVersion, VerticalAlignment = VerticalAlignment.Center };
+        if (!_updates.IsSupported)
+        {
+            return new StackPanel { Spacing = 4, Children = { version, Caption("インストール版でのみ更新できる") } };
+        }
+
+        var check = new Button { Content = "更新を確認" };
+        check.Click += (_, _) => _ = _updates.CheckAsync();
+        var apply = new Button { Classes = { "accent" } };
+        apply.Click += (_, _) => _ = _updates.ApplyAsync("--settings");
+        var status = new TextBlock { FontSize = 12, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center };
+        void Refresh()
+        {
+            apply.Content = $"v{_updates.AvailableVersion} に更新";
+            apply.IsVisible = _updates.AvailableVersion is not null;
+            status.Text = _updates.Status ?? (_updates.IsChecked && _updates.AvailableVersion is null ? "最新" : "");
+        }
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            Children = { version, check, apply, status },
+        };
+        // ページを開いている間だけ、更新の状態を追う
+        row.AttachedToVisualTree += (_, _) =>
+        {
+            Refresh();
+            _updates.Changed += Refresh;
+        };
+        row.DetachedFromVisualTree += (_, _) => _updates.Changed -= Refresh;
+        return row;
     }
 
     private const string ItemsPageTag = "items";

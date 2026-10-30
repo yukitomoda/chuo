@@ -1,4 +1,4 @@
-# v で始まるタグ（例: v0.1.0）を push すると、Windows 向けの zip を作ってリリースに添付する（設計 10 章）。
+# v で始まるタグ（例: v0.1.0）を push すると、Windows 向けのインストーラーと zip を作ってリリースに添付する（設計 10 章）。
 name: Release
 
 on:
@@ -45,11 +45,20 @@ jobs:
           Compress-Archive -Path artifacts/publish-win/* -DestinationPath $zip
           "ZIP=$zip" >> $env:GITHUB_ENV
 
+      # インストーラー（chuo-win-Setup.exe）と、アプリの中から更新するためのパッケージ（.nupkg と releases.win.json）を作る。
+      # vpk の版は、本体が参照する Velopack と合わせる（Directory.Packages.props）
+      - name: インストーラーを作る
+        run: |
+          dotnet tool install --global vpk --version 1.2.161
+          vpk pack --packId chuo --packVersion ${{ steps.version.outputs.version }} --packDir artifacts/publish-win `
+            --mainExe chuo.exe --packTitle chuo --outputDir artifacts/releases --noPortable --shortcuts StartMenuRoot
+
       - name: リリースを作る
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $arguments = @('${{ github.ref_name }}', $env:ZIP, '--title', '${{ github.ref_name }}', '--generate-notes')
+          $files = @($env:ZIP) + (Get-ChildItem artifacts/releases -File).FullName
+          $arguments = @('${{ github.ref_name }}') + $files + @('--title', '${{ github.ref_name }}', '--generate-notes')
           # v0.2.0-beta.1 のようにハイフンを含むバージョンは、プレリリースにする
           if ('${{ steps.version.outputs.version }}' -match '-') { $arguments += '--prerelease' }
           gh release create @arguments

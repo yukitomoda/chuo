@@ -55,7 +55,8 @@ public sealed class LauncherWindow : Window
 
     public LauncherWindow(
         SearchService search, IShell shell, IClipboard clipboard, ILauncherWindowIntegration integration, IconCache icons,
-        SettingsLauncher settingsLauncher, ItemPreferences preferences, IOptionsMonitor<ChuoSettings> settings, ILogger<LauncherWindow> logger)
+        SettingsLauncher settingsLauncher, ItemPreferences preferences, IOptionsMonitor<ChuoSettings> settings, UpdateService updates,
+        ILogger<LauncherWindow> logger)
     {
         _search = search;
         _shell = shell;
@@ -139,7 +140,7 @@ public sealed class LauncherWindow : Window
         }, RoutingStrategies.Bubble, handledEventsToo: true);
         _panelArea = new StackPanel { IsVisible = false, Children = { _panelTitle, _panel } };
 
-        Content = new StackPanel { Children = { _input, _error, _results, _panelArea } };
+        Content = new StackPanel { Children = { _input, _error, _results, _panelArea, CreateUpdateNotice(updates) } };
 
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, (_, e) => TrackModifiers(e, pressed: true), RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -492,6 +493,34 @@ public sealed class LauncherWindow : Window
             && _results.SelectedItem is SearchResult result
             && result.Item.Actions.Any(a => a.Kind == ItemActionKind.RunAsAdministrator);
         _results.Classes.Set(AdminClass, active);
+    }
+
+    /// <summary>
+    /// 新しい版があるときに、下の端に出す知らせ（要件定義書 10 章）。クリックで更新し、入れ替えた後にランチャーを開き直す。
+    /// </summary>
+    private static Control CreateUpdateNotice(UpdateService updates)
+    {
+        var notice = new TextBlock
+        {
+            FontSize = 12,
+            Foreground = Brushes.SteelBlue,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 10),
+        };
+        void Refresh()
+        {
+            notice.Text = updates.Status ?? $"v{updates.AvailableVersion} に更新";
+            notice.IsVisible = updates.AvailableVersion is not null;
+        }
+        Refresh();
+        updates.Changed += Refresh;
+        notice.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            _ = updates.ApplyAsync("--show");
+        };
+        return notice;
     }
 
     private void ClearError() => _error.IsVisible = false;

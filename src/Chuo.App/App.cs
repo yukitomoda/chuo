@@ -64,7 +64,10 @@ public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) 
 
         var settingsLauncher = services.GetRequiredService<SettingsLauncher>();
         settingsLauncher.Closed += window.TrimMemoryIfEnabled;
-        AddTrayIcon(window, settingsLauncher, desktop, logger);
+        var updates = services.GetRequiredService<UpdateService>();
+        updates.Shutdown = () => desktop.Shutdown();
+        updates.Start();
+        AddTrayIcon(window, settingsLauncher, updates, desktop, logger);
         if (showOnStart)
         {
             window.ShowLauncher();
@@ -83,7 +86,8 @@ public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) 
     /// タスクトレイ（通知領域）にアイコンを出す（要件定義書 4 章）。クリックでランチャーを開き、右クリックのメニューから設定画面と終了を選べる。
     /// トレイのない環境（拡張のない GNOME など）では表示されないだけで、ほかの動作には影響しない。
     /// </summary>
-    private void AddTrayIcon(LauncherWindow window, SettingsLauncher settingsLauncher, IClassicDesktopStyleApplicationLifetime desktop, ILogger logger)
+    private void AddTrayIcon(
+        LauncherWindow window, SettingsLauncher settingsLauncher, UpdateService updates, IClassicDesktopStyleApplicationLifetime desktop, ILogger logger)
     {
         try
         {
@@ -94,6 +98,16 @@ public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) 
                 return item;
             }
 
+            // 新しい版があるときだけ出す
+            var update = Item("", () => _ = updates.ApplyAsync());
+            void UpdateItem()
+            {
+                update.Header = $"v{updates.AvailableVersion} に更新";
+                update.IsVisible = updates.AvailableVersion is not null;
+            }
+            UpdateItem();
+            updates.Changed += UpdateItem;
+
             using var icon = AssetLoader.Open(new Uri("avares://chuo/Assets/chuo.png"));
             var tray = new TrayIcon
             {
@@ -103,6 +117,7 @@ public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) 
                 [
                     Item("ランチャーを開く", () => window.ShowLauncher()),
                     Item("設定", settingsLauncher.Open),
+                    update,
                     new NativeMenuItemSeparator(),
                     Item("終了", () => desktop.Shutdown()),
                 ],
