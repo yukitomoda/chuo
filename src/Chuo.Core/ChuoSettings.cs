@@ -11,6 +11,12 @@ public sealed class ChuoSettings
     /// <summary>結果の一覧に表示する最大の件数。</summary>
     public int MaxResults { get; set; } = 8;
 
+    /// <summary>
+    /// ランチャーのスキン（設計 8.1）。空なら OS のライト／ダークに従う。<c>light</c>、<c>dark</c>、
+    /// または設定のフォルダの <c>skins/</c> の中のフォルダの名前。
+    /// </summary>
+    public string Skin { get; set; } = "";
+
     public ImeSettings Ime { get; set; } = new();
 
     public RenderingSettings Rendering { get; set; } = new();

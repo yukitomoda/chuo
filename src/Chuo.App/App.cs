@@ -35,6 +35,7 @@ public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) 
         var logger = services.GetRequiredService<ILogger<App>>();
         desktop.Exit += (_, _) => Shutdown(logger);
 
+        services.GetRequiredService<SkinService>().ApplyThemeVariant();
         var window = services.GetRequiredService<LauncherWindow>();
         services.GetRequiredService<LauncherService>().Attach(window);
         await window.PrewarmAsync();

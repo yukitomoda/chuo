@@ -58,6 +58,7 @@ internal static class Program
         services.AddSingleton<LauncherWindow>();
         services.AddSingleton<SettingsLauncher>();
         services.AddSingleton<UpdateService>();
+        services.AddSingleton<SkinService>();
         services.AddTransient<SettingsWindow>();
 
         using var host = builder.Build();

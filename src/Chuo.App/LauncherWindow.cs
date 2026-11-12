@@ -24,10 +24,8 @@ namespace Chuo.App;
 /// <summary>
 /// ランチャーのウィンドウ。起動時に一度だけ生成し、以後は表示と非表示を切り替えるだけにする（設計 4.1）。
 /// </summary>
-public sealed class LauncherWindow : Window
+public sealed partial class LauncherWindow : Window
 {
-    private const double WindowWidth = 680;
-
     private readonly SearchService _search;
     private readonly IShell _shell;
     private readonly IClipboard _clipboard;
@@ -56,7 +54,7 @@ public sealed class LauncherWindow : Window
     public LauncherWindow(
         SearchService search, IShell shell, IClipboard clipboard, ILauncherWindowIntegration integration, IconCache icons,
         SettingsLauncher settingsLauncher, ItemPreferences preferences, IOptionsMonitor<ChuoSettings> settings, UpdateService updates,
-        ILogger<LauncherWindow> logger)
+        SkinService skins, ILogger<LauncherWindow> logger)
     {
         _search = search;
         _shell = shell;
@@ -69,7 +67,6 @@ public sealed class LauncherWindow : Window
         _logger = logger;
 
         Title = "chuo";
-        Width = WindowWidth;
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         ShowInTaskbar = false;
@@ -80,9 +77,9 @@ public sealed class LauncherWindow : Window
         _input = new TextBox
         {
             PlaceholderText = "検索…",
-            FontSize = 22,
             Margin = new Thickness(12),
         };
+        BindResource(_input, FontSizeProperty, InputFontSizeKey);
         _input.TextChanged += (_, _) =>
         {
             // 打ち始めたらアクションパネルを閉じ、検索に戻る
@@ -126,9 +123,12 @@ public sealed class LauncherWindow : Window
             UpdateAdminHighlight();
         };
         // アクションが失敗したことを知らせる1行（理由はログに書く）
-        _error = new TextBlock { Foreground = Brushes.IndianRed, Margin = new Thickness(16, 0, 16, 8), IsVisible = false, TextTrimming = TextTrimming.CharacterEllipsis };
+        _error = new TextBlock { Margin = new Thickness(16, 0, 16, 8), IsVisible = false, TextTrimming = TextTrimming.CharacterEllipsis };
+        BindResource(_error, TextBlock.ForegroundProperty, ErrorKey);
 
-        _panelTitle = new TextBlock { FontSize = 13, Opacity = 0.6, Margin = new Thickness(16, 0, 16, 4), TextTrimming = TextTrimming.CharacterEllipsis };
+        _panelTitle = new TextBlock { Opacity = 0.6, Margin = new Thickness(16, 0, 16, 4), TextTrimming = TextTrimming.CharacterEllipsis };
+        BindResource(_panelTitle, TextBlock.FontSizeProperty, PanelTitleFontSizeKey);
+        BindResource(_panelTitle, TextBlock.ForegroundProperty, SubtextKey);
         _panel = new ListBox { ItemTemplate = CreatePanelEntryTemplate(), Margin = new Thickness(12, 0, 12, 12), Focusable = false };
         AddSelectionStyles(_panel);
         _panel.AddHandler(PointerReleasedEvent, (_, e) =>
@@ -140,7 +140,10 @@ public sealed class LauncherWindow : Window
         }, RoutingStrategies.Bubble, handledEventsToo: true);
         _panelArea = new StackPanel { IsVisible = false, Children = { _panelTitle, _panel } };
 
-        Content = new StackPanel { Children = { _input, _error, _results, _panelArea, CreateUpdateNotice(updates) } };
+        // 背景の画像は、大きさに影響しないようブラシで敷く（スキン、設計 8.1）
+        _skinRoot = new Border { Child = new StackPanel { Children = { _input, _error, _results, _panelArea, CreateUpdateNotice(updates) } } };
+        Content = _skinRoot;
+        AttachSkins(skins);
 
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, (_, e) => TrackModifiers(e, pressed: true), RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -502,12 +505,12 @@ public sealed class LauncherWindow : Window
     {
         var notice = new TextBlock
         {
-            FontSize = 12,
-            Foreground = Brushes.SteelBlue,
             Cursor = new Cursor(StandardCursorType.Hand),
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(16, 0, 16, 10),
         };
+        BindResource(notice, TextBlock.FontSizeProperty, SmallFontSizeKey);
+        BindResource(notice, TextBlock.ForegroundProperty, LinkKey);
         void Refresh()
         {
             notice.Text = updates.Status ?? $"v{updates.AvailableVersion} に更新";
@@ -573,11 +576,16 @@ public sealed class LauncherWindow : Window
             }
             if (entry.Gesture is not null)
             {
-                var key = new TextBlock { Text = entry.Gesture, FontSize = 12, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center };
+                var key = new TextBlock { Text = entry.Gesture, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center };
+                BindResource(key, TextBlock.FontSizeProperty, SmallFontSizeKey);
+                BindResource(key, TextBlock.ForegroundProperty, SubtextKey);
                 DockPanel.SetDock(key, Dock.Right);
                 row.Children.Add(key);
             }
-            row.Children.Add(new TextBlock { Text = entry.Title, FontSize = 15 });
+            var title = new TextBlock { Text = entry.Title };
+            BindResource(title, TextBlock.FontSizeProperty, TitleFontSizeKey);
+            BindResource(title, TextBlock.ForegroundProperty, TextKey);
+            row.Children.Add(title);
             if (!entry.StartsGroup)
             {
                 return row;
@@ -587,7 +595,7 @@ public sealed class LauncherWindow : Window
             {
                 Children =
                 {
-                    new Border { Height = 1, Background = Brushes.Gray, Opacity = 0.3, Margin = new Thickness(0, 0, 0, 4) },
+                    BindResource(new Border { Height = 1, Margin = new Thickness(0, 0, 0, 4) }, Border.BackgroundProperty, SeparatorKey),
                     row,
                 },
             };
@@ -770,35 +778,15 @@ public sealed class LauncherWindow : Window
         }
     }
 
-    private const string SelectedBackgroundKey = "ChuoSelectedBackground";
-    private const string SelectedPointerOverBackgroundKey = "ChuoSelectedPointerOverBackground";
-    private const string PointerOverBackgroundKey = "ChuoPointerOverBackground";
-    private const string AdminBackgroundKey = "ChuoAdminBackground";
-
     /// <summary>Ctrl+Shift を押していて、選んでいる行を管理者として実行できるときに一覧に付けるクラス。</summary>
     private const string AdminClass = "admin";
 
     /// <summary>
-    /// 選択している行の背景。Fluent の既定はアクセントの色が濃く文字が読みにくいので、明るい色にする。
-    /// マウスを重ねた行は、選択している行より目立たないよう、それより淡くする。
+    /// 選択している行とマウスを重ねた行の背景。色はスキンのリソース（<see cref="ApplySkin"/>）から取る。
+    /// Fluent の既定はアクセントの色が濃く文字が読みにくいので、自前の色にする。
     /// </summary>
     private static void AddSelectionStyles(ListBox list)
     {
-        list.Resources.ThemeDictionaries[ThemeVariant.Light] = new ResourceDictionary
-        {
-            [SelectedBackgroundKey] = new SolidColorBrush(Color.Parse("#D3E8FB")),
-            [SelectedPointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#C5E0F9")),
-            [PointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#E6E6E6")),
-            [AdminBackgroundKey] = new SolidColorBrush(Color.Parse("#FCDDB4")),
-        };
-        list.Resources.ThemeDictionaries[ThemeVariant.Dark] = new ResourceDictionary
-        {
-            [SelectedBackgroundKey] = new SolidColorBrush(Color.Parse("#2F4F6F")),
-            [SelectedPointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#375C80")),
-            [PointerOverBackgroundKey] = new SolidColorBrush(Color.Parse("#3A3A3A")),
-            [AdminBackgroundKey] = new SolidColorBrush(Color.Parse("#6B4A1F")),
-        };
-
         Style BackgroundStyle(Func<Selector?, Selector> state, string key) =>
             new(x => state(x.OfType<ListBoxItem>()).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
             {
@@ -823,10 +811,15 @@ public sealed class LauncherWindow : Window
         new((_, _) =>
         {
             var icon = new Image { Width = 32, Height = 32, Margin = new Thickness(0, 0, 10, 0) };
-            var title = new TextBlock { FontSize = 15, TextTrimming = TextTrimming.CharacterEllipsis };
-            var subtitle = new TextBlock { FontSize = 11, Opacity = 0.6, TextTrimming = TextTrimming.CharacterEllipsis };
+            var title = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis };
+            BindResource(title, TextBlock.FontSizeProperty, TitleFontSizeKey);
+            BindResource(title, TextBlock.ForegroundProperty, TextKey);
+            var subtitle = new TextBlock { Opacity = 0.6, TextTrimming = TextTrimming.CharacterEllipsis };
+            BindResource(subtitle, TextBlock.FontSizeProperty, SubtitleFontSizeKey);
+            BindResource(subtitle, TextBlock.ForegroundProperty, SubtextKey);
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { title, subtitle } };
             var favorite = new TextBlock { Text = "★", FontSize = 14, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) };
+            BindResource(favorite, TextBlock.ForegroundProperty, TextKey);
             var row = new DockPanel { Children = { icon, favorite, text } };
             DockPanel.SetDock(icon, Dock.Left);
             DockPanel.SetDock(favorite, Dock.Right);
@@ -878,7 +871,7 @@ public sealed class LauncherWindow : Window
         }
 
         var area = screen.WorkingArea;
-        var width = (int)(WindowWidth * screen.Scaling);
+        var width = (int)(Width * screen.Scaling);
         Position = new PixelPoint(area.X + (area.Width - width) / 2, area.Y + area.Height / 4);
     }
 

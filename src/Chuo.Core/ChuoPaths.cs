@@ -18,6 +18,9 @@ public static class ChuoPaths
     /// <summary>項目ごとのユーザー設定（お気に入り、無視など）。</summary>
     public static string ItemsFile => Path.Combine(ConfigDirectory, "items.json");
 
+    /// <summary>ユーザーが置くスキン（設計 8.1）。</summary>
+    public static string SkinDirectory => Path.Combine(ConfigDirectory, "skins");
+
     public static string LogDirectory => Path.Combine(DataDirectory, "logs");
 
     /// <summary>本体に同梱するプラグインのフォルダ。</summary>

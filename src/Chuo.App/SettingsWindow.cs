@@ -8,6 +8,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Chuo.Abstractions;
 using Chuo.Core;
+using Chuo.Core.Skins;
 using Chuo.Core.Items;
 using Chuo.Core.Platform;
 using Chuo.Core.Plugins;
@@ -38,14 +39,17 @@ public sealed class SettingsWindow : Window
     private readonly ItemPreferences _preferences;
     private readonly IAutoStart _autoStart;
     private readonly UpdateService _updates;
+    private readonly SkinService _skins;
     private readonly ListBox _pluginList;
     private readonly ContentControl _page = new();
     private readonly TextBlock _status = new() { Margin = new Thickness(16, 8), TextWrapping = TextWrapping.Wrap };
 
     public SettingsWindow(
         PluginManager plugins, IConfiguration configuration, SettingsStore store, IShell shell, IClipboard clipboard,
-        SearchService search, ItemPreferences preferences, IAutoStart autoStart, UpdateService updates, ILogger<SettingsWindow> logger)
+        SearchService search, ItemPreferences preferences, IAutoStart autoStart, UpdateService updates, SkinService skins,
+        ILogger<SettingsWindow> logger)
     {
+        _skins = skins;
         _autoStart = autoStart;
         _updates = updates;
         _search = search;
@@ -176,6 +180,9 @@ public sealed class SettingsWindow : Window
         panel.Children.Add(SectionHeading("バージョン"));
         panel.Children.Add(CreateUpdate());
 
+        panel.Children.Add(SectionHeading("外観"));
+        panel.Children.Add(CreateSkin());
+
         panel.Children.Add(SectionHeading("ウィンドウ"));
         var window = _configuration.GetSection(ChuoSettings.WindowSection);
         foreach (var field in SettingsSchema.Describe(typeof(WindowSettings)))
@@ -250,6 +257,32 @@ public sealed class SettingsWindow : Window
         panel.Children.Add(check);
         panel.Children.Add(other);
         return panel;
+    }
+
+    /// <summary>
+    /// スキンの選択（設計 8.1）。一覧は開くたびに作るので、スキンのフォルダに足したものは開き直せば出る。
+    /// </summary>
+    private Control CreateSkin()
+    {
+        var skins = _skins.Catalog.List();
+        var current = _configuration[nameof(ChuoSettings.Skin)] ?? SkinCatalog.FollowSystem;
+        var combo = new ComboBox
+        {
+            ItemsSource = skins.Select(s => s.Name).ToList(),
+            SelectedIndex = Math.Max(0, skins.ToList().FindIndex(s => s.Id == current)),
+            MinWidth = 200,
+        };
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (combo.SelectedIndex >= 0)
+            {
+                var id = skins[combo.SelectedIndex].Id;
+                Write(() => _store.Set("skin", id.Length == 0 ? null : JsonValue.Create(id)));
+            }
+        };
+        var open = new Button { Content = "スキンのフォルダを開く" };
+        open.Click += (_, _) => Run("スキンのフォルダを開けなかった", () => _shell.Open(_skins.EnsureDirectory()));
+        return Labeled("スキン", null, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { combo, open } });
     }
 
     /// <summary>今の版と、更新の確認と実行（要件定義書 10 章）。インストーラーで入れたときだけ更新できる。</summary>
