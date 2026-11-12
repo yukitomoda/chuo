@@ -3,6 +3,9 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
+using Avalonia.Threading;
+using Chuo.Abstractions;
+using Chuo.Core.Search;
 using Chuo.Core.Skins;
 using Microsoft.Extensions.Logging;
 
@@ -37,6 +40,10 @@ public sealed partial class LauncherWindow
 
     private readonly Border _skinRoot;
     private Bitmap? _skinImage;
+    /// <summary>ウィンドウを一度表示し、部品のテンプレートができた。</summary>
+    private bool _prewarmed;
+    /// <summary>背景の画像の範囲を測るため、仮の候補を並べている。選択の変化などに反応しない。</summary>
+    private bool _measuringSkin;
 
     /// <summary>
     /// 部品のプロパティを、リソースに結びつける。スキンが値を決めていないリソースはないので、部品の既定（Fluent の色）になる。
@@ -52,6 +59,8 @@ public sealed partial class LauncherWindow
     {
         ApplySkin(skins.Current);
         skins.Changed += () => ApplySkin(skins.Current);
+        // 最大の件数を変えたら、背景の画像を敷く範囲を測り直す
+        _settings.OnChange((_, _) => Dispatcher.UIThread.Post(UpdateSkinImageArea));
     }
 
     /// <summary>スキンを反映する。null なら OS のライト／ダークに従い、同梱のライトとダークを使い分ける。UI スレッドで呼ぶ。</summary>
@@ -105,9 +114,56 @@ public sealed partial class LauncherWindow
                     SkinImageStretch.None => Stretch.None,
                     _ => Stretch.UniformToFill,
                 },
+                AlignmentY = AlignmentY.Top,
                 Opacity = skin.BackgroundImageOpacity,
             };
         previous?.Dispose();
+        UpdateSkinImageArea();
+    }
+
+    /// <summary>
+    /// 背景の画像を敷く範囲を、候補を最大の件数まで並べたときの大きさに固定する。ウィンドウの大きさに合わせると、
+    /// 候補の数で高さが変わるたびに画像の拡大率が変わり、がたつくため。低いときは、下の部分が切れて見える。
+    /// 測るには部品のテンプレートが要るので、ウィンドウを一度表示した（<see cref="PrewarmAsync"/>）後に行う。
+    /// </summary>
+    private void UpdateSkinImageArea()
+    {
+        if (_skinRoot.Background is not ImageBrush brush || !_prewarmed)
+        {
+            return;
+        }
+        var height = MeasureMaxHeight();
+        brush.DestinationRect = new RelativeRect(0, 0, Width, height, RelativeUnit.Absolute);
+    }
+
+    /// <summary>
+    /// 候補を最大の件数（タイトルとサブタイトルのある行）まで並べたときの、ウィンドウの中身の高さ。
+    /// 一覧は見えない行を作らずに測るので、1件だけ並べて測り、残りは行の高さを足す。
+    /// </summary>
+    private double MeasureMaxHeight()
+    {
+        var count = Math.Max(1, _settings.CurrentValue.MaxResults);
+        var (items, visible, selected) = (_results.ItemsSource, _results.IsVisible, _results.SelectedIndex);
+        var panelVisible = _panelArea.IsVisible;
+        _measuringSkin = true;
+        try
+        {
+            _results.ItemsSource = new[] { new SearchResult(new ResultItem { Id = "measure", Title = "A", Subtitle = "A" }, "", 0) };
+            _results.IsVisible = true;
+            _panelArea.IsVisible = false;
+            _skinRoot.Measure(new Size(Width, double.PositiveInfinity));
+            var row = _results.ContainerFromIndex(0)?.DesiredSize.Height ?? 0;
+            return _skinRoot.DesiredSize.Height + row * (count - 1);
+        }
+        finally
+        {
+            _results.ItemsSource = items;
+            _results.IsVisible = visible;
+            _results.SelectedIndex = selected;
+            _panelArea.IsVisible = panelVisible;
+            _measuringSkin = false;
+            _skinRoot.InvalidateMeasure();
+        }
     }
 
     private static ResourceDictionary CreateResources(Skin skin)

@@ -118,6 +118,10 @@ public sealed partial class LauncherWindow : Window
         _results.ContextRequested += OnResultContextRequested;
         _results.SelectionChanged += (_, _) =>
         {
+            if (_measuringSkin)
+            {
+                return;
+            }
             UpdateCompletionHint();
             ClearError();
             UpdateAdminHighlight();
@@ -175,6 +179,8 @@ public sealed partial class LauncherWindow : Window
             _integration.Attach(handle);
         }
         await WaitForFramesAsync(2);
+        _prewarmed = true;
+        UpdateSkinImageArea();
         Hide();
         _prewarming = false;
     }
