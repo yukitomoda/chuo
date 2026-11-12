@@ -65,7 +65,7 @@ public sealed class SkinWindowSize
     public double? Width { get; set; }
 }
 
-/// <summary>色。背景、文字、入力欄の色を省くと、Fluent のテーマの色を使う。</summary>
+/// <summary>色。背景と入力欄の色を省くと Fluent のテーマの色、文字の色を省くと土台（ライトかダーク）の色を使う。</summary>
 public sealed class SkinColors
 {
     public string? Background { get; set; }
@@ -118,11 +118,11 @@ public sealed record Skin(
     double BackgroundImageOpacity,
     SkinImageStretch BackgroundImageStretch);
 
-/// <summary>実際に使う色。null は Fluent のテーマの色を使う。</summary>
+/// <summary>実際に使う色。null は Fluent のテーマの色を使う。文字の色は、省いても土台の色を決めておく。</summary>
 public sealed record SkinPalette(
     string? Background,
-    string? Text,
-    string? Subtext,
+    string Text,
+    string Subtext,
     string? InputBackground,
     string? InputBorder,
     string Selected,
@@ -223,8 +223,9 @@ public sealed class SkinCatalog(string directory)
         var dark = @base == SkinBase.Dark;
         var palette = new SkinPalette(
             Background: colors?.Background,
-            Text: colors?.Text,
-            Subtext: colors?.Subtext ?? colors?.Text,
+            // 文字の色は必ず決める。決めないと、一覧の文字が Fluent のテーマの色ではなく黒になる（ダークで読めない）
+            Text: colors?.Text ?? (dark ? "#FFFFFFFF" : "#E4000000"),
+            Subtext: colors?.Subtext ?? colors?.Text ?? (dark ? "#FFFFFFFF" : "#E4000000"),
             InputBackground: colors?.InputBackground,
             InputBorder: colors?.InputBorder,
             Selected: colors?.Selected ?? (dark ? "#2F4F6F" : "#D3E8FB"),

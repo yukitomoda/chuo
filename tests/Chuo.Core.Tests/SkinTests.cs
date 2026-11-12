@@ -40,6 +40,9 @@ public sealed class SkinTests : IDisposable
         Assert.Equal(22, dark.InputFontSize);
         Assert.Equal(680, dark.Width);
         Assert.Null(dark.Colors.Background);
+        // 文字の色を決めないと、一覧の文字が黒になってダークで読めない
+        Assert.Equal("#FFFFFFFF", dark.Colors.Text);
+        Assert.Equal("#E4000000", _catalog.Load(SkinCatalog.Light)!.Colors.Text);
     }
 
     [Fact]

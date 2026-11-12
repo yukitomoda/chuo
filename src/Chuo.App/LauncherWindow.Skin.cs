@@ -128,17 +128,11 @@ public sealed partial class LauncherWindow
             [LinkKey] = Brush(colors.Link),
             [SeparatorKey] = Brush(colors.Separator),
         };
-        if (colors.Text is { } text)
+        resources[TextKey] = Brush(colors.Text);
+        resources[SubtextKey] = Brush(colors.Subtext);
+        foreach (var key in InputForegroundKeys)
         {
-            resources[TextKey] = Brush(text);
-            foreach (var key in InputForegroundKeys)
-            {
-                resources[key] = Brush(text);
-            }
-        }
-        if (colors.Subtext is { } subtext)
-        {
-            resources[SubtextKey] = Brush(subtext);
+            resources[key] = Brush(colors.Text);
         }
         if (colors.InputBackground is { } inputBackground)
         {
