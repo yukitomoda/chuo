@@ -150,6 +150,7 @@ public sealed partial class LauncherWindow : Window
         AttachSkins(skins);
 
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, OnPointerMovedForIdle, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyDownEvent, (_, e) => TrackModifiers(e, pressed: true), RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyUpEvent, (_, e) => TrackModifiers(e, pressed: false), RoutingStrategies.Tunnel, handledEventsToo: true);
         Deactivated += (_, _) =>
@@ -203,6 +204,7 @@ public sealed partial class LauncherWindow : Window
     {
         if (!IsVisible)
         {
+            SetMouseIdle(true);
             MoveToScreen();
             Show();
             Activate();
@@ -532,6 +534,31 @@ public sealed partial class LauncherWindow : Window
         return notice;
     }
 
+    /// <summary>最後に見たマウスの位置。表示した直後に、動いていなくても PointerMoved が来ることがあるので、位置で比べる。</summary>
+    private Point? _idlePointer;
+
+    private void SetMouseIdle(bool idle)
+    {
+        _idlePointer = null;
+        _results.Classes.Set(MouseIdleClass, idle);
+        _panel.Classes.Set(MouseIdleClass, idle);
+    }
+
+    private void OnPointerMovedForIdle(object? sender, PointerEventArgs e)
+    {
+        if (!_results.Classes.Contains(MouseIdleClass))
+        {
+            return;
+        }
+        var position = e.GetPosition(this);
+        if (_idlePointer is { } last && last != position)
+        {
+            SetMouseIdle(false);
+            return;
+        }
+        _idlePointer = position;
+    }
+
     private void ClearError() => _error.IsVisible = false;
 
     private bool PanelOpen => _panelArea.IsVisible;
@@ -787,6 +814,9 @@ public sealed partial class LauncherWindow : Window
     /// <summary>Ctrl+Shift を押していて、選んでいる行を管理者として実行できるときに一覧に付けるクラス。</summary>
     private const string AdminClass = "admin";
 
+    /// <summary>表示してからマウスが動いていないときに一覧に付けるクラス。マウスを重ねた行を光らせない。</summary>
+    private const string MouseIdleClass = "mouseIdle";
+
     /// <summary>
     /// 選択している行とマウスを重ねた行の背景。色はスキンのリソース（<see cref="ApplySkin"/>）から取る。
     /// Fluent の既定はアクセントの色が濃く文字が読みにくいので、自前の色にする。
@@ -804,6 +834,15 @@ public sealed partial class LauncherWindow : Window
         list.Styles.Add(BackgroundStyle(x => x!.Class(":selected"), SelectedBackgroundKey));
         list.Styles.Add(BackgroundStyle(x => x!.Class(":selected").Class(":pointerover"), SelectedPointerOverBackgroundKey));
         list.Styles.Add(BackgroundStyle(x => x!.Class(":selected").Class(":pressed"), SelectedPointerOverBackgroundKey));
+        // 表示してからマウスが動くまでは、カーソルの下の行を光らせない（たまたまカーソルがある行が、選択と紛らわしいため）
+        Style IdleStyle(Func<Selector, Selector> state, IBrush? brush, string? key) =>
+            new(x => state(x.OfType<ListBox>().Class(MouseIdleClass).Descendant().OfType<ListBoxItem>())
+                .Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters = { new Setter(ContentPresenter.BackgroundProperty, key is null ? brush! : new DynamicResourceExtension(key)) },
+            };
+        list.Styles.Add(IdleStyle(x => x.Class(":pointerover"), Brushes.Transparent, null));
+        list.Styles.Add(IdleStyle(x => x.Class(":selected").Class(":pointerover"), null, SelectedBackgroundKey));
         // 管理者として実行するときの色（UAC の盾の色に寄せた橙）。ほかの状態より優先するので最後に置く
         list.Styles.Add(new Style(x => x.OfType<ListBox>().Class(AdminClass).Descendant().OfType<ListBoxItem>().Class(":selected")
             .Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
