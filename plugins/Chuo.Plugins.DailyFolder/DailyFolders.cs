@@ -21,6 +21,13 @@ public sealed class DailyFolders(IOptionsMonitor<DailyFolderOptions> options, Ke
 
     private string Format => options.CurrentValue.NameFormat is { Length: > 0 } format ? format : "yyyy-MM-dd";
 
+    /// <summary>今日のフォルダ。まだ作っていなくても返す（作る前に保持できるように）。</summary>
+    public DailyFolderEntry TodayEntry()
+    {
+        var name = Today.ToString(Format, CultureInfo.InvariantCulture);
+        return new DailyFolderEntry(name, TodayPath, Today, kept.Contains(name));
+    }
+
     /// <summary>今日のフォルダを（なければ作って）返す。</summary>
     public string EnsureToday() => Directory.CreateDirectory(TodayPath).FullName;
 

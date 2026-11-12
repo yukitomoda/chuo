@@ -63,12 +63,14 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
         if (text.Length == 0)
         {
             TakeTrashError(items);
+            var today = _folders.TodayEntry();
             items.Add(new ResultItem
             {
                 Id = "today",
-                Title = "今日のフォルダを開く",
-                Subtitle = _folders.TodayPath,
-                Actions = [OpenToday(_folders), ItemAction.CopyText(_folders.TodayPath, "パスをコピー")],
+                Title = today.Kept ? "★ 今日のフォルダを開く" : "今日のフォルダを開く",
+                Subtitle = today.Kept ? $"保持中 ・ {today.Path}" : today.Path,
+                // 直近のフォルダと同じく、Ctrl+Enter で保持を切り替える
+                Actions = [OpenToday(_folders), ToggleKept(today, prefix), ItemAction.CopyText(today.Path, "パスをコピー")],
             });
             items.AddRange(_folders.Recent(RecentCount).Select(folder => RecentItem(folder, prefix)));
         }

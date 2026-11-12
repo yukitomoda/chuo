@@ -59,6 +59,18 @@ public sealed class DailyFolderTests : IDisposable
     }
 
     [Fact]
+    public void 今日のフォルダは作る前でも保持できる()
+    {
+        Assert.False(_folders.TodayEntry().Kept);
+
+        _folders.ToggleKept(_folders.TodayEntry().Name);
+
+        Assert.Equal("2026-10-19", _folders.TodayEntry().Name);
+        Assert.True(_folders.TodayEntry().Kept);
+        Assert.False(Directory.Exists(_folders.TodayPath));
+    }
+
+    [Fact]
     public void 残す日数より古く保持していないフォルダを削除の対象にする()
     {
         // 残す日数は 7 なので、10-13 から今日（10-19）までは残す
