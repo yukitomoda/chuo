@@ -18,6 +18,9 @@ internal sealed class DesktopEntrySource : IAppSource
     /// <summary>優先度の高い順。同じ ID の .desktop が複数あれば、先にあるものを使う。</summary>
     public IReadOnlyList<WatchedFolder> Roots { get; } = DataDirectories().Select(d => new WatchedFolder(Path.Combine(d, "applications"))).ToList();
 
+    // .desktop を読むのは速いので、前回のものは持たない
+    public IReadOnlyList<CatalogItem>? LoadCached() => null;
+
     public IReadOnlyList<CatalogItem> Scan()
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);

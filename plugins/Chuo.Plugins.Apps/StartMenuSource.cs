@@ -1,15 +1,19 @@
-using Chuo.Abstractions;
+using System.Diagnostics;
 using System.Runtime.Versioning;
+using System.Text.Json;
+using Chuo.Abstractions;
 using Chuo.Plugins.Shared;
+using Microsoft.Extensions.Logging;
 
 namespace Chuo.Plugins.Apps;
 
 /// <summary>
 /// Windows のスタートメニューのアプリを列挙する（設計 4.5）。
 /// ショートカット（.lnk と .url）と、ショートカットを持たないパッケージのアプリ（Microsoft Store のアプリなど）。
+/// 集めたもの（<see cref="StartMenuSnapshot"/>）は <paramref name="cachePath"/> に保存し、次の起動ではまずそこから一覧を作る。
 /// </summary>
 [SupportedOSPlatform("windows")]
-internal sealed class StartMenuSource : IAppSource
+internal sealed class StartMenuSource(string cachePath, ILogger logger) : IAppSource
 {
     private static readonly EnumerationOptions Enumeration = new() { RecurseSubdirectories = true, IgnoreInaccessible = true };
 
@@ -27,16 +31,75 @@ internal sealed class StartMenuSource : IAppSource
         new WatchedFolder(PackagedApps.DataRoot, IncludeSubdirectories: false),
     ];
 
-    public IReadOnlyList<CatalogItem> Scan() =>
-    [
-        .. ShortcutDeduplication.Distinct(
+    public IReadOnlyList<CatalogItem> Scan()
+    {
+        var snapshot = Collect();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+            File.WriteAllText(cachePath, JsonSerializer.Serialize(snapshot));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "アプリの一覧を保存できなかった");
+        }
+        return CreateItems(snapshot);
+    }
+
+    public IReadOnlyList<CatalogItem>? LoadCached()
+    {
+        try
+        {
+            return File.Exists(cachePath) && JsonSerializer.Deserialize<StartMenuSnapshot>(File.ReadAllText(cachePath)) is { } snapshot
+                ? CreateItems(snapshot)
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            logger.LogWarning(ex, "前回のアプリの一覧を読めなかった");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// ショートカットとパッケージのアプリを集める。パッケージのアプリの列挙（シェルの COM）は遅いことがあるので、
+    /// ショートカットを読むのと並行して行う。
+    /// </summary>
+    private StartMenuSnapshot Collect()
+    {
+        var packagedTask = Task.Run(() =>
+        {
+            var start = Stopwatch.GetTimestamp();
+            var apps = PackagedApps.Enumerate();
+            return (Apps: apps, Elapsed: Stopwatch.GetElapsedTime(start));
+        });
+
+        var shortcutStart = Stopwatch.GetTimestamp();
+        var shortcuts = ShortcutDeduplication.Distinct(
                 _shortcutRoots
                     .Where(Directory.Exists)
                     .SelectMany(root => Directory.EnumerateFiles(root, "*", Enumeration))
                     .Where(IsShortcut)
-                    .Select(path => (path, IsLink(path) ? ShellLink.TryRead(path) : null)))
-            .Select(shortcut => CreateItem(shortcut.Path, shortcut.Link)),
-        .. PackagedApps.Enumerate().Select(CreatePackagedItem),
+                    .ToList()
+                    // サインインの直後はディスクが遅いので、ショートカットは並行して読む。重複をまとめる順序は保つ
+                    .AsParallel().AsOrdered().WithDegreeOfParallelism(4)
+                    .Select(path => (path, IsLink(path) ? ShellLink.TryRead(path) : null))
+                    .ToList())
+            .Select(s => new ShortcutEntry(s.Path, s.Link?.TargetPath))
+            .ToList();
+        var shortcutElapsed = Stopwatch.GetElapsedTime(shortcutStart);
+
+        var packaged = packagedTask.GetAwaiter().GetResult();
+        logger.LogInformation("ショートカット {Shortcuts} 件（{ShortcutMs:F0}ms）、パッケージのアプリ {Packaged} 件（{PackagedMs:F0}ms）",
+            shortcuts.Count, shortcutElapsed.TotalMilliseconds, packaged.Apps.Count, packaged.Elapsed.TotalMilliseconds);
+        return new StartMenuSnapshot(shortcuts, [.. packaged.Apps]);
+    }
+
+    /// <summary>集めたものから項目を作る。ファイルには触らないので速い。</summary>
+    internal static IReadOnlyList<CatalogItem> CreateItems(StartMenuSnapshot snapshot) =>
+    [
+        .. snapshot.Shortcuts.Select(CreateItem),
+        .. snapshot.Packaged.Select(CreatePackagedItem),
     ];
 
     public static bool IsShortcut(string path) =>
@@ -44,10 +107,10 @@ internal sealed class StartMenuSource : IAppSource
 
     private static bool IsLink(string path) => Path.GetExtension(path).Equals(".lnk", StringComparison.OrdinalIgnoreCase);
 
-    private static CatalogItem CreateItem(string path, ShellLinkInfo? link)
+    private static CatalogItem CreateItem(ShortcutEntry shortcut)
     {
+        var (path, target) = shortcut;
         var title = Path.GetFileNameWithoutExtension(path);
-        var target = link?.TargetPath;
 
         // 実行ファイルの名前（例: Visual Studio Code の code）でも見つかるようにする
         var keywords = new List<string>();
@@ -60,7 +123,12 @@ internal sealed class StartMenuSource : IAppSource
         List<ItemAction> actions =
         [
             ItemAction.Open(path, "起動"),
-            ItemAction.ShowInFolder(target is not null && File.Exists(target) ? target : path, "ファイルの場所を開く"),
+            // リンク先があるかは、実行するときに確かめる。一覧を作るときに確かめると、つながっていないドライブで待たされる
+            new("ファイルの場所を開く", ctx =>
+            {
+                ctx.Shell.ShowInFolder(target is not null && File.Exists(target) ? target : path);
+                return ValueTask.FromResult(ActionResult.Close);
+            }),
         ];
         if (Elevation.CanRunAsAdministrator(path, target))
         {
@@ -93,6 +161,12 @@ internal sealed class StartMenuSource : IAppSource
         };
     }
 }
+
+/// <summary>スタートメニューから集めたもの。前回の一覧として保存する。</summary>
+internal sealed record StartMenuSnapshot(List<ShortcutEntry> Shortcuts, List<PackagedApp> Packaged);
+
+/// <summary>ショートカットのパスと、そのリンク先（読めなければ null）。</summary>
+internal sealed record ShortcutEntry(string Path, string? Target);
 
 /// <summary>
 /// 同じアプリを指すショートカットを1つにまとめる（設計 4.5）。ユーザーと全ユーザーのスタートメニューの両方に

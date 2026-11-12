@@ -6,14 +6,15 @@ namespace Chuo.Plugins.Apps;
 
 /// <summary>
 /// インストールされたアプリを一覧にする。アプリの追加や削除はフォルダの変更の監視で反映する。
+/// 一覧を作るのには時間がかかるので、起動したらまず前回の一覧を出し、作り直したら差し替える。
 /// </summary>
 [CatalogProvider]
-public sealed class AppCatalogProvider(ILogger<AppCatalogProvider> logger) : ICatalogProvider, IDisposable
+public sealed class AppCatalogProvider(IPluginContext context, ILogger<AppCatalogProvider> logger) : ICatalogProvider, IDisposable
 {
     /// <summary>インストールの途中は変更が続くので、落ち着いてから作り直す。</summary>
     private static readonly TimeSpan RescanDelay = TimeSpan.FromSeconds(2);
 
-    private readonly IAppSource? _source = CreateSource();
+    private readonly IAppSource? _source = CreateSource(Path.Combine(context.DataDirectory, "apps-cache.json"), logger);
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly Lock _scanGate = new();
     private Timer? _rescanTimer;
@@ -29,6 +30,7 @@ public sealed class AppCatalogProvider(ILogger<AppCatalogProvider> logger) : ICa
         }
 
         _catalog = catalog;
+        LoadCached();
         Rescan();
 
         _rescanTimer = new Timer(_ => Rescan());
@@ -71,6 +73,16 @@ public sealed class AppCatalogProvider(ILogger<AppCatalogProvider> logger) : ICa
 
     private void OnChanged(object sender, FileSystemEventArgs e) => _rescanTimer?.Change(RescanDelay, Timeout.InfiniteTimeSpan);
 
+    private void LoadCached()
+    {
+        var stopwatch = Stopwatch.StartNew();
+        if (_source?.LoadCached() is { } items)
+        {
+            _catalog?.ReplaceAll(items);
+            logger.LogInformation("前回のアプリの一覧から {Count} 件を出した（{Elapsed:F0}ms）", items.Count, stopwatch.Elapsed.TotalMilliseconds);
+        }
+    }
+
     private void Rescan()
     {
         lock (_scanGate)
@@ -93,8 +105,8 @@ public sealed class AppCatalogProvider(ILogger<AppCatalogProvider> logger) : ICa
         }
     }
 
-    private static IAppSource? CreateSource() =>
-        OperatingSystem.IsWindows() ? new StartMenuSource()
+    private static IAppSource? CreateSource(string cachePath, ILogger logger) =>
+        OperatingSystem.IsWindows() ? new StartMenuSource(cachePath, logger)
         : OperatingSystem.IsLinux() ? new DesktopEntrySource()
         : null;
 }

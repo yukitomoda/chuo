@@ -292,3 +292,56 @@ public class ShortcutDeduplicationTests
         Assert.Equal(4, Chuo.Plugins.Apps.ShortcutDeduplication.Distinct(shortcuts).Count());
     }
 }
+
+// スタートメニューの読み取りは Windows だけだが、保存した一覧から項目を作るところはどの OS でも動く
+#pragma warning disable CA1416
+public sealed class StartMenuCacheTests : IDisposable
+{
+    private readonly string _path = Path.Combine(Path.GetTempPath(), "chuo-apps-" + Guid.NewGuid().ToString("N"), "apps-cache.json");
+
+    public void Dispose()
+    {
+        if (Directory.GetParent(_path) is { Exists: true } directory)
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    private Chuo.Plugins.Apps.StartMenuSource CreateSource() =>
+        new(_path, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+    [Fact]
+    public void 前回の一覧がなければ_null()
+    {
+        Assert.Null(CreateSource().LoadCached());
+    }
+
+    [Fact]
+    public void 保存した一覧から項目を作る()
+    {
+        var snapshot = new Chuo.Plugins.Apps.StartMenuSnapshot(
+            // 区切りに / を使うと、Windows でも Linux でもファイル名を取り出せる
+            [new("C:/Start Menu/Visual Studio Code.lnk", "C:/VS Code/vscode.exe"), new("C:/Start Menu/Site.url", null)],
+            [new("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", "電卓", "Microsoft.WindowsCalculator")]);
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        File.WriteAllText(_path, System.Text.Json.JsonSerializer.Serialize(snapshot));
+
+        var items = CreateSource().LoadCached();
+
+        Assert.NotNull(items);
+        Assert.Equal(["Visual Studio Code", "Site", "電卓"], items.Select(i => i.Title));
+        Assert.Equal(["vscode"], items[0].Keywords);
+        Assert.Equal(["起動", "ファイルの場所を開く"], items[0].Actions.Take(2).Select(a => a.Title));
+        Assert.Equal("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", items[2].Id);
+    }
+
+    [Fact]
+    public void 壊れた一覧は読まずに_null()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        File.WriteAllText(_path, "{ broken");
+
+        Assert.Null(CreateSource().LoadCached());
+    }
+}
+#pragma warning restore CA1416
