@@ -820,9 +820,12 @@ public sealed partial class LauncherWindow : Window
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { title, subtitle } };
             var favorite = new TextBlock { Text = "★", FontSize = 14, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) };
             BindResource(favorite, TextBlock.ForegroundProperty, TextKey);
-            var row = new DockPanel { Children = { icon, favorite, text } };
+            // エイリアスは、右の端に1つずつ小さな枠で囲んで出す（要件定義書 6.1）
+            var aliases = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(8, 0, 0, 0) };
+            var row = new DockPanel { Children = { icon, favorite, aliases, text } };
             DockPanel.SetDock(icon, Dock.Left);
             DockPanel.SetDock(favorite, Dock.Right);
+            DockPanel.SetDock(aliases, Dock.Right);
 
             // 行は使い回されるので、DataContext が変わるたびに中身を差し替える
             row.DataContextChanged += async (_, _) =>
@@ -832,6 +835,10 @@ public sealed partial class LauncherWindow : Window
                     return;
                 }
                 favorite.IsVisible = _preferences.Current.IsFavorite(result.GlobalId);
+                var itemAliases = _preferences.Current.AliasesOf(result.GlobalId);
+                aliases.Children.Clear();
+                aliases.Children.AddRange(itemAliases.Select(a => AliasChip(a.Text)));
+                aliases.IsVisible = itemAliases.Length > 0;
                 title.Text = item.Title;
                 subtitle.Text = item.Subtitle;
                 subtitle.IsVisible = !string.IsNullOrEmpty(item.Subtitle);
@@ -856,6 +863,24 @@ public sealed partial class LauncherWindow : Window
             };
             return row;
         }, supportsRecycling: true);
+
+    private static Border AliasChip(string alias)
+    {
+        var text = new TextBlock { Text = alias, VerticalAlignment = VerticalAlignment.Center };
+        BindResource(text, TextBlock.FontSizeProperty, SubtitleFontSizeKey);
+        BindResource(text, TextBlock.ForegroundProperty, SubtextKey);
+        return BindResource(
+            new Border
+            {
+                Child = text,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Padding = new Thickness(5, 1),
+                Opacity = 0.8,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+            Border.BorderBrushProperty, SeparatorKey);
+    }
 
     /// <summary>設定に従い、マウスカーソルのある画面かメインの画面の、中央のやや上に移動する。</summary>
     private void MoveToScreen()
