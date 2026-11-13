@@ -144,7 +144,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
             {
                 Id = "folder:" + folder.Name,
                 Title = folder.Kept ? $"★ {folder.Name}" : folder.Name,
-                Subtitle = folder.Kept ? "保持中 ・ Enter で解除" : "Enter で保持",
+                Subtitle = Subtitle(folder.Kept ? "保持中" : null, DailyFolders.Peek(folder.Path), folder.Kept ? "Enter で解除" : "Enter で保持"),
                 Actions = [ToggleKept(folder, refresh), ItemAction.Open(folder.Path)],
             }),
         ];
@@ -156,7 +156,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
         {
             Id = "folder:" + folder.Name,
             Title = folder.Name,
-            Subtitle = "Ctrl+Enter で保持",
+            Subtitle = Subtitle(DailyFolders.Peek(folder.Path), "Ctrl+Enter で保持"),
             Actions = [ItemAction.Open(folder.Path), ToggleKept(folder, refresh)],
         };
 
@@ -166,7 +166,7 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
         {
             Id = "folder:" + folder.Name,
             Title = folder.Kept ? $"★ {folder.Name}" : folder.Name,
-            Subtitle = folder.Kept ? "保持中" : null,
+            Subtitle = Subtitle(folder.Kept ? "保持中" : null, DailyFolders.Peek(folder.Path)),
             Actions =
             [
                 ItemAction.Open(folder.Path),
@@ -179,6 +179,9 @@ public sealed class DailyFolderCommands : ILiveQueryProvider
                 ItemAction.CopyText(folder.Path, "パスをコピー"),
             ],
         };
+
+    /// <summary>空でない部分を「 ・ 」でつなぐ。</summary>
+    private static string Subtitle(params string?[] parts) => string.Join(" ・ ", parts.Where(p => !string.IsNullOrEmpty(p)));
 
     private void TakeTrashError(List<ResultItem> items)
     {

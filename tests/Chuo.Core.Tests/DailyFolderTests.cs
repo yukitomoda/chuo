@@ -98,6 +98,23 @@ public sealed class DailyFolderTests : IDisposable
     }
 
     [Fact]
+    public void 中身の先頭の数件を出す()
+    {
+        Create("2026-10-18", "2026-10-17", "2026-10-16");
+        var full = Path.Combine(_options.Root, "2026-10-18");
+        File.WriteAllText(Path.Combine(full, "a.txt"), "");
+        Directory.CreateDirectory(Path.Combine(full, "img"));
+        var one = Path.Combine(_options.Root, "2026-10-17");
+        Directory.CreateDirectory(Path.Combine(one, "img"));
+
+        Assert.Equal(2, DailyFolders.Peek(full, 3).Split(", ").Length);
+        Assert.Contains("img/", DailyFolders.Peek(full, 3));
+        Assert.EndsWith(" …", DailyFolders.Peek(full, 1));
+        Assert.Equal("img/", DailyFolders.Peek(one));
+        Assert.Equal("空", DailyFolders.Peek(Path.Combine(_options.Root, "2026-10-16")));
+    }
+
+    [Fact]
     public void 残す日数より古く保持していないフォルダを削除の対象にする()
     {
         // 残す日数は 7 なので、10-13 から今日（10-19）までは残す

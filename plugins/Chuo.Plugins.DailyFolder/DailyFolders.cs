@@ -66,6 +66,27 @@ public sealed class DailyFolders(IOptionsMonitor<DailyFolderOptions> options, Ke
     public IReadOnlyList<DailyFolderEntry> EmptyPastFolders() =>
         [.. List().Where(d => d.Date < Today && !d.Kept && IsEmpty(d.Path))];
 
+    /// <summary>
+    /// フォルダの中身の先頭の数件（例: <c>memo.txt, img/, 図.png …</c>）。いつのフォルダかを思い出す手がかりにする。
+    /// フォルダには <c>/</c> を付ける。並びは OS が返す順のまま（すべてを読んで並べ替えると遅くなるため）。空なら「空」。
+    /// </summary>
+    public static string Peek(string path, int count = 3)
+    {
+        try
+        {
+            var entries = new DirectoryInfo(path).EnumerateFileSystemInfos().Take(count + 1)
+                .Select(e => e is DirectoryInfo ? e.Name + "/" : e.Name)
+                .ToList();
+            return entries.Count == 0 ? "空"
+                : entries.Count > count ? string.Join(", ", entries.Take(count)) + " …"
+                : string.Join(", ", entries);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "";
+        }
+    }
+
     private static bool IsEmpty(string path)
     {
         try
