@@ -71,6 +71,33 @@ public sealed class DailyFolderTests : IDisposable
     }
 
     [Fact]
+    public void 今日より前の空のフォルダだけを対象にし_保持したものは除く()
+    {
+        Create("2026-10-19", "2026-10-18", "2026-10-17", "2026-10-16", "2026-10-15");
+        File.WriteAllText(Path.Combine(_options.Root, "2026-10-17", "memo.txt"), "");
+        Directory.CreateDirectory(Path.Combine(_options.Root, "2026-10-16", "sub"));
+        _kept.Toggle("2026-10-15");
+
+        Assert.Equal(["2026-10-18"], _folders.EmptyPastFolders().Select(f => f.Name));
+    }
+
+    [Fact]
+    public void 空のフォルダの削除は設定で有効にしたときだけ行う()
+    {
+        Create("2026-10-18");
+        var cleaner = new EmptyFolderCleaner(
+            _folders, new StaticOptionsMonitor<DailyFolderOptions>(_options),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EmptyFolderCleaner>.Instance);
+
+        cleaner.Clean();
+        Assert.True(Directory.Exists(Path.Combine(_options.Root, "2026-10-18")));
+
+        _options.DeleteEmptyFolders = true;
+        cleaner.Clean();
+        Assert.False(Directory.Exists(Path.Combine(_options.Root, "2026-10-18")));
+    }
+
+    [Fact]
     public void 残す日数より古く保持していないフォルダを削除の対象にする()
     {
         // 残す日数は 7 なので、10-13 から今日（10-19）までは残す

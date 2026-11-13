@@ -15,6 +15,9 @@ public sealed class DailyFolderOptions
     [Display(Name = "残す日数", Description = "これより古いものを prune で削除", Order = 2), Range(1, 3650)]
     public int RetentionDays { get; set; } = 30;
 
+    [Display(Name = "空のフォルダを削除", Description = "過去の空のフォルダを自動で削除", Order = 3)]
+    public bool DeleteEmptyFolders { get; set; }
+
     /// <summary>
     /// 既定の置き場所は、ドキュメントのフォルダの中の Daily。ホームの直下は散らかさない。
     /// Linux でドキュメントのフォルダが決まっていない（ホームが返る）ときは、~/Documents を使う。
@@ -43,5 +46,6 @@ public sealed class DailyFolderPlugin : IChuoPlugin
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new KeptFolders(Path.Combine(context.DataDirectory, "kept.json")));
         services.AddSingleton<DailyFolders>();
+        services.AddHostedService<EmptyFolderCleaner>();
     }
 }

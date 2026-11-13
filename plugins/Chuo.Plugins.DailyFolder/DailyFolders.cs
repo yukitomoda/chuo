@@ -60,6 +60,24 @@ public sealed class DailyFolders(IOptionsMonitor<DailyFolderOptions> options, Ke
     /// <summary>今日より前のフォルダを、新しい順に <paramref name="count"/> 件まで返す。</summary>
     public IReadOnlyList<DailyFolderEntry> Recent(int count) => [.. List().Where(d => d.Date < Today).Take(count)];
 
+    /// <summary>
+    /// 今日より前の、中に何もない（ファイルもフォルダもない）フォルダ。保持しているものは除く。
+    /// </summary>
+    public IReadOnlyList<DailyFolderEntry> EmptyPastFolders() =>
+        [.. List().Where(d => d.Date < Today && !d.Kept && IsEmpty(d.Path))];
+
+    private static bool IsEmpty(string path)
+    {
+        try
+        {
+            return !Directory.EnumerateFileSystemEntries(path).Any();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     public bool ToggleKept(string name) => kept.Toggle(name);
 }
 

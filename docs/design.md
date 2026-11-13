@@ -207,6 +207,7 @@ GNOME の Wayland では、アプリ側からはホットキーの登録、フ�
 - 扱うのは、名前が日付の書式（既定は `yyyy-MM-dd`）に合うフォルダだけ。ほかのフォルダには触れない。
 - 「残す日数」が N なら、今日を含めた N 日分を残し、それより前の日付のフォルダを削除の対象にする。
 - 保持したフォルダの名前は、プラグインのデータのフォルダの `kept.json` に保存する。プラグインは `settings.json` に書き込めないため。
+- 空のフォルダの自動削除（設定 `DeleteEmptyFolders`、既定はオフ）は、プラグインの常駐処理（`BackgroundService`）で、起動の 30 秒後と、その後は 1 時間ごとに行う。設定を有効にしたときもすぐに行う。対象は今日より前で、ファイルもフォルダもなく、保持していないもの。中身がないので、ごみ箱には移さずに `Directory.Delete`（再帰しない）で削除する。調べた後にファイルが置かれても、空でなければ失敗するので消えない。
 - ごみ箱へは、Windows では `Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory`（`RecycleOption.SendToRecycleBin`）、Linux では `gio trash` で移す。移せなかったフォルダは削除せずに残し、次の一覧の先頭に知らせを出す。
 - 操作の後は、`ActionResult.SetQuery` で同じ入力を返して一覧を作り直す。ホストは、入力が変わらなくても検索し直す。
 
