@@ -102,6 +102,9 @@ public sealed partial class LauncherWindow : Window
         _results = new ListBox
         {
             ItemTemplate = CreateItemTemplate(),
+            // 並ぶのは最大の件数（既定 8）までなので、仮想化しない。仮想化すると、表示中に中身を入れ替えたとき
+            // 行を作るのが次の描画まで遅れ、スキンの背景の画像の範囲を測れない
+            ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel()),
             Margin = new Thickness(12, 0, 12, 12),
             IsVisible = false,
         };
