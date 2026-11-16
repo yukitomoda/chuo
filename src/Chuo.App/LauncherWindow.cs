@@ -516,6 +516,8 @@ public sealed partial class LauncherWindow : Window
     {
         var notice = new TextBlock
         {
+            // 背景がないと、文字の塊（GlyphRun）ごとにしか当たり判定ができず、空白や字種の境目で途切れる
+            Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.Hand),
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(16, 0, 16, 10),
