@@ -102,4 +102,50 @@ public sealed class SkinTests : IDisposable
         Assert.Equal(SkinBase.Dark, skin.Base);
         Assert.Null(skin.BackgroundImagePath);
     }
+
+    [Fact]
+    public void EnsureDirectory_はスキーマを書き出し_空なら見本も置く()
+    {
+        _catalog.EnsureDirectory();
+
+        Assert.True(File.Exists(Path.Combine(_root, SkinCatalog.SchemaFileName)));
+        Assert.Equal("見本", _catalog.Load("sample")!.Name);
+
+        // すでにスキンのフォルダがあるときは、見本を作り直さずスキーマだけを更新する
+        Directory.Delete(Path.Combine(_root, "sample"), recursive: true);
+        Write("custom", """{ "name": "自作" }""");
+        File.WriteAllText(Path.Combine(_root, SkinCatalog.SchemaFileName), "old");
+
+        _catalog.EnsureDirectory();
+
+        Assert.Equal(SkinCatalog.SchemaJson, File.ReadAllText(Path.Combine(_root, SkinCatalog.SchemaFileName)));
+        Assert.False(Directory.Exists(Path.Combine(_root, "sample")));
+    }
+
+    [Fact]
+    public void スキーマは_SkinFile_のすべての項目と選択肢を持つ()
+    {
+        using var doc = JsonDocument.Parse(SkinCatalog.SchemaJson);
+        var root = doc.RootElement;
+        var props = root.GetProperty("properties");
+
+        static string[] ExpectedNames(Type type) =>
+            [.. type.GetProperties().Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)).Order()];
+        static string[] SchemaPropertyNames(JsonElement element) =>
+            [.. element.GetProperty("properties").EnumerateObject().Select(p => p.Name).Where(n => n != "$schema").Order()];
+        static string[] SchemaEnumValues(JsonElement element) =>
+            [.. element.GetProperty("enum").EnumerateArray().Select(e => e.GetString()!)];
+
+        Assert.Equal(ExpectedNames(typeof(SkinFile)), SchemaPropertyNames(root));
+        Assert.Equal(ExpectedNames(typeof(SkinFont)), SchemaPropertyNames(props.GetProperty("font")));
+        Assert.Equal(ExpectedNames(typeof(SkinWindowSize)), SchemaPropertyNames(props.GetProperty("window")));
+        Assert.Equal(ExpectedNames(typeof(SkinColors)), SchemaPropertyNames(props.GetProperty("colors")));
+        Assert.Equal(ExpectedNames(typeof(SkinImage)), SchemaPropertyNames(props.GetProperty("backgroundImage")));
+        Assert.Equal(
+            [.. Enum.GetNames<SkinBase>().Select(JsonNamingPolicy.CamelCase.ConvertName)],
+            SchemaEnumValues(props.GetProperty("base")));
+        Assert.Equal(
+            [.. Enum.GetNames<SkinImageStretch>().Select(JsonNamingPolicy.CamelCase.ConvertName)],
+            SchemaEnumValues(props.GetProperty("backgroundImage").GetProperty("properties").GetProperty("stretch")));
+    }
 }

@@ -63,16 +63,10 @@ public sealed class SkinService : IDisposable
         }
     }
 
-    /// <summary>スキンのフォルダを開く。空なら、作り方が分かるよう見本を置く。</summary>
+    /// <summary>スキンのフォルダを開く。スキーマを書き出し、空なら作り方が分かるよう見本も置く。</summary>
     public string EnsureDirectory()
     {
-        var directory = Catalog.Directory;
-        if (!Directory.Exists(directory) || !Directory.EnumerateFileSystemEntries(directory).Any())
-        {
-            var sample = Path.Combine(directory, "sample");
-            Directory.CreateDirectory(sample);
-            File.WriteAllText(Path.Combine(sample, SkinCatalog.FileName), SkinCatalog.SampleJson);
-        }
+        var directory = Catalog.EnsureDirectory();
         WatchDirectory();
         return directory;
     }

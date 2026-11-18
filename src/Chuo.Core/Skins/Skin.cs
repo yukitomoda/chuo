@@ -144,6 +144,7 @@ public sealed class SkinCatalog(string directory)
     public const string Dark = "dark";
 
     public const string FileName = "skin.json";
+    public const string SchemaFileName = "skin.schema.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -250,9 +251,27 @@ public sealed class SkinCatalog(string directory)
 
     private static double Positive(double? value, double fallback) => value is > 0 ? value.Value : fallback;
 
+    /// <summary>
+    /// スキンのフォルダを用意し、スキーマを書き出す。スキンのフォルダがまだ1つもなければ、作り方が分かるよう見本も置く。
+    /// </summary>
+    public string EnsureDirectory()
+    {
+        var hasSkins = System.IO.Directory.Exists(Directory) && System.IO.Directory.EnumerateDirectories(Directory).Any();
+        System.IO.Directory.CreateDirectory(Directory);
+        File.WriteAllText(Path.Combine(Directory, SchemaFileName), SchemaJson);
+        if (!hasSkins)
+        {
+            var sample = Path.Combine(Directory, "sample");
+            System.IO.Directory.CreateDirectory(sample);
+            File.WriteAllText(Path.Combine(sample, FileName), SampleJson);
+        }
+        return Directory;
+    }
+
     /// <summary>スキンを作るときの見本。スキンのフォルダが空のときに置く。</summary>
     public const string SampleJson = """
         {
+          "$schema": "../skin.schema.json",
           // 設定画面に出す名前
           "name": "見本",
           // light か dark。Fluent のテーマと、省いた値の既定を決める
@@ -276,6 +295,170 @@ public sealed class SkinCatalog(string directory)
           },
           // 画像はこのフォルダからの相対パス。文字が読めるよう、opacity で薄くする
           "backgroundImage": { "path": null, "opacity": 0.3, "stretch": "uniformToFill" }
+        }
+        """;
+
+    /// <summary><c>skin.json</c> の JSON Schema。エディタでの補完と検証のために <c>skins/skin.schema.json</c> に書き出す。</summary>
+    public const string SchemaJson = """
+        {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "title": "chuo スキン",
+          "description": "chuo のスキンの設定（skin.json）。省いた値は base の既定を使う。",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "$schema": {
+              "type": "string"
+            },
+            "name": {
+              "type": ["string", "null"],
+              "description": "設定画面に出す名前。省けばフォルダの名前。"
+            },
+            "base": {
+              "type": "string",
+              "enum": ["light", "dark"],
+              "enumDescriptions": [
+                "ライトテーマを土台にする",
+                "ダークテーマを土台にする"
+              ],
+              "default": "light",
+              "description": "スキンの土台。Fluent のライト／ダークと、省いた値の既定を決める。"
+            },
+            "font": {
+              "type": ["object", "null"],
+              "description": "文字の種類と大きさ。",
+              "additionalProperties": false,
+              "properties": {
+                "family": {
+                  "type": ["string", "null"],
+                  "description": "フォント名。省けば OS の既定。"
+                },
+                "inputSize": {
+                  "type": ["number", "null"],
+                  "exclusiveMinimum": 0,
+                  "default": 22,
+                  "description": "入力欄の文字の大きさ。"
+                },
+                "titleSize": {
+                  "type": ["number", "null"],
+                  "exclusiveMinimum": 0,
+                  "default": 15,
+                  "description": "項目のタイトルの文字の大きさ。"
+                },
+                "subtitleSize": {
+                  "type": ["number", "null"],
+                  "exclusiveMinimum": 0,
+                  "default": 11,
+                  "description": "項目のサブタイトルなど、小さい文字の大きさ。"
+                }
+              }
+            },
+            "window": {
+              "type": ["object", "null"],
+              "description": "ウィンドウの大きさ。",
+              "additionalProperties": false,
+              "properties": {
+                "width": {
+                  "type": ["number", "null"],
+                  "minimum": 320,
+                  "maximum": 2000,
+                  "default": 680,
+                  "description": "ウィンドウの幅（320〜2000）。"
+                }
+              }
+            },
+            "colors": {
+              "type": ["object", "null"],
+              "description": "各部の色（#RRGGBB または #AARRGGBB）。省くと base の既定を使う。",
+              "additionalProperties": false,
+              "properties": {
+                "background": {
+                  "$ref": "#/definitions/color",
+                  "description": "ウィンドウの背景の色（#RRGGBB または #AARRGGBB）。省くと Fluent のテーマの色。"
+                },
+                "text": {
+                  "$ref": "#/definitions/color",
+                  "description": "文字の色（#RRGGBB または #AARRGGBB）。省くと土台の色。"
+                },
+                "subtext": {
+                  "$ref": "#/definitions/color",
+                  "description": "サブタイトルなどの控えめな文字の色（#RRGGBB または #AARRGGBB）。省くと text と同じ色。"
+                },
+                "inputBackground": {
+                  "$ref": "#/definitions/color",
+                  "description": "入力欄の背景の色（#RRGGBB または #AARRGGBB）。省くと Fluent のテーマの色。"
+                },
+                "inputBorder": {
+                  "$ref": "#/definitions/color",
+                  "description": "入力欄の枠の色（#RRGGBB または #AARRGGBB）。省くと Fluent のテーマの色。"
+                },
+                "selected": {
+                  "$ref": "#/definitions/color",
+                  "description": "選んでいる行の背景の色（#RRGGBB または #AARRGGBB）。"
+                },
+                "selectedHover": {
+                  "$ref": "#/definitions/color",
+                  "description": "選んでいる行にマウスを重ねたときの背景の色（#RRGGBB または #AARRGGBB）。"
+                },
+                "hover": {
+                  "$ref": "#/definitions/color",
+                  "description": "マウスを重ねた行の背景の色（#RRGGBB または #AARRGGBB）。"
+                },
+                "admin": {
+                  "$ref": "#/definitions/color",
+                  "description": "Ctrl+Shift を押している間（管理者として実行）の、選んでいる行の背景の色（#RRGGBB または #AARRGGBB）。"
+                },
+                "error": {
+                  "$ref": "#/definitions/color",
+                  "description": "アクションの失敗の知らせの色（#RRGGBB または #AARRGGBB）。"
+                },
+                "link": {
+                  "$ref": "#/definitions/color",
+                  "description": "更新の知らせなど、押せる文字の色（#RRGGBB または #AARRGGBB）。"
+                },
+                "separator": {
+                  "$ref": "#/definitions/color",
+                  "description": "アクションパネルの区切りの線の色（#RRGGBB または #AARRGGBB）。"
+                }
+              }
+            },
+            "backgroundImage": {
+              "type": ["object", "null"],
+              "description": "背景の画像。",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": ["string", "null"],
+                  "description": "画像のパス（スキンのフォルダからの相対パス、または絶対パス）。"
+                },
+                "opacity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "default": 1,
+                  "description": "画像の不透明度（0〜1）。文字を読みやすくするため、薄くして使う。"
+                },
+                "stretch": {
+                  "type": "string",
+                  "enum": ["uniformToFill", "uniform", "fill", "none"],
+                  "enumDescriptions": [
+                    "縦横の比を保ち、ウィンドウを覆うまで広げる（はみ出した分は切る）",
+                    "縦横の比を保ち、ウィンドウに収まるように広げる",
+                    "縦横の比を変えて、ウィンドウに合わせる",
+                    "広げない"
+                  ],
+                  "default": "uniformToFill",
+                  "description": "画像の広げ方。"
+                }
+              }
+            }
+          },
+          "definitions": {
+            "color": {
+              "type": ["string", "null"],
+              "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+            }
+          }
         }
         """;
 }
