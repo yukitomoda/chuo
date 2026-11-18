@@ -373,51 +373,63 @@ public sealed class SkinCatalog(string directory)
               "additionalProperties": false,
               "properties": {
                 "background": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "ウィンドウの背景の色（#RRGGBB または #AARRGGBB）。省くと Fluent のテーマの色。"
                 },
                 "text": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "文字の色（#RRGGBB または #AARRGGBB）。省くと土台の色。"
                 },
                 "subtext": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "サブタイトルなどの控えめな文字の色（#RRGGBB または #AARRGGBB）。省くと text と同じ色。"
                 },
                 "inputBackground": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "入力欄の背景の色（#RRGGBB または #AARRGGBB）。省くと Fluent のテーマの色。"
                 },
                 "inputBorder": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "入力欄の枠の色（#RRGGBB または #AARRGGBB）。省くと Fluent のテーマの色。"
                 },
                 "selected": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "選んでいる行の背景の色（#RRGGBB または #AARRGGBB）。"
                 },
                 "selectedHover": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "選んでいる行にマウスを重ねたときの背景の色（#RRGGBB または #AARRGGBB）。"
                 },
                 "hover": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "マウスを重ねた行の背景の色（#RRGGBB または #AARRGGBB）。"
                 },
                 "admin": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "Ctrl+Shift を押している間（管理者として実行）の、選んでいる行の背景の色（#RRGGBB または #AARRGGBB）。"
                 },
                 "error": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "アクションの失敗の知らせの色（#RRGGBB または #AARRGGBB）。"
                 },
                 "link": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "更新の知らせなど、押せる文字の色（#RRGGBB または #AARRGGBB）。"
                 },
                 "separator": {
-                  "$ref": "#/definitions/color",
+                  "type": ["string", "null"],
+                  "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "description": "アクションパネルの区切りの線の色（#RRGGBB または #AARRGGBB）。"
                 }
               }
@@ -451,12 +463,6 @@ public sealed class SkinCatalog(string directory)
                   "description": "画像の広げ方。"
                 }
               }
-            }
-          },
-          "definitions": {
-            "color": {
-              "type": ["string", "null"],
-              "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
             }
           }
         }

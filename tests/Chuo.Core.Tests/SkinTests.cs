@@ -147,5 +147,13 @@ public sealed class SkinTests : IDisposable
         Assert.Equal(
             [.. Enum.GetNames<SkinImageStretch>().Select(JsonNamingPolicy.CamelCase.ConvertName)],
             SchemaEnumValues(props.GetProperty("backgroundImage").GetProperty("properties").GetProperty("stretch")));
+
+        // draft-07 では $ref と並べた description が無視されるので、各項目に直接 type と description を書く
+        foreach (var color in props.GetProperty("colors").GetProperty("properties").EnumerateObject())
+        {
+            Assert.True(color.Value.TryGetProperty("type", out _));
+            Assert.True(color.Value.TryGetProperty("description", out _));
+            Assert.False(color.Value.TryGetProperty("$ref", out _));
+        }
     }
 }
