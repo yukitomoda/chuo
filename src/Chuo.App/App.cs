@@ -135,6 +135,7 @@ public sealed class App(IHost host, bool showOnStart, bool openSettingsOnStart) 
     private void Shutdown(ILogger logger)
     {
         _hotkey?.Dispose();
+        host.Services.GetRequiredService<NotificationService>().CloseAll();
         try
         {
             // プラグインの停止を待つ。UI スレッドの同期コンテキストを使わないよう、スレッドプールで行う

@@ -1,0 +1,7 @@
+{
+  "id": "chuo.reminders",
+  "name": "リマインダー",
+  "version": "1.0.0",
+  "entry": "Chuo.Plugins.Reminders.dll",
+  "hostApi": "1.4"
+}

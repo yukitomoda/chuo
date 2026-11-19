@@ -97,3 +97,17 @@ public sealed class UnsupportedAutoStart : IAutoStart
     public void SetEnabled(bool enabled) =>
         throw new PlatformNotSupportedException("この環境は自動起動に対応していません。");
 }
+
+/// <summary>OS の通知音を鳴らす。</summary>
+public interface ISystemSound
+{
+    void PlayNotification();
+}
+
+/// <summary>通知音を鳴らせない環境で使う、何もしない実装。</summary>
+public sealed class NullSystemSound : ISystemSound
+{
+    public void PlayNotification()
+    {
+    }
+}

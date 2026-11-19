@@ -53,6 +53,8 @@ internal static class Program
         }
         services.AddSingleton<LauncherService>();
         services.AddSingleton<ILauncher>(sp => sp.GetRequiredService<LauncherService>());
+        services.AddSingleton<NotificationService>();
+        services.AddSingleton<INotifier>(sp => sp.GetRequiredService<NotificationService>());
         services.AddSingleton<IClipboard, AvaloniaClipboard>();
         services.AddSingleton<IconCache>();
         services.AddSingleton<LauncherWindow>();

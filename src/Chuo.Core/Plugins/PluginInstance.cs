@@ -15,7 +15,7 @@ namespace Chuo.Core.Plugins;
 internal sealed class PluginInstance
 {
     /// <summary>本体からプラグインのホストに中継するサービス。</summary>
-    private static readonly Type[] RelayedServices = [typeof(IShell), typeof(IClipboard), typeof(ILauncher), typeof(ILoggerFactory)];
+    private static readonly Type[] RelayedServices = [typeof(IShell), typeof(IClipboard), typeof(ILauncher), typeof(INotifier), typeof(ILoggerFactory)];
 
     private readonly PluginLoadContext _loadContext;
     private readonly IHost _host;

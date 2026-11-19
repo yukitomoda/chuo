@@ -32,3 +32,24 @@ public interface ILauncher
 
     void Hide();
 }
+
+/// <summary>ユーザーへの通知を出す。プラグインはコンストラクタで受け取れる。</summary>
+public interface INotifier
+{
+    /// <summary>通知を画面に表示する。どのスレッドから呼んでもよい。</summary>
+    void Show(Notification notification);
+}
+
+/// <summary>通知の内容。</summary>
+/// <param name="Title">見出し。</param>
+/// <param name="Message">本文。</param>
+/// <param name="Actions">閉じるボタンの横に並べる操作（スヌーズなど）。押すと操作を実行して通知を閉じる。</param>
+/// <param name="PlaySound">通知音を鳴らすか。</param>
+public sealed record Notification(
+    string Title,
+    string? Message = null,
+    IReadOnlyList<NotificationAction>? Actions = null,
+    bool PlaySound = true);
+
+/// <summary>通知のボタン。</summary>
+public sealed record NotificationAction(string Label, Action Execute);

@@ -16,8 +16,8 @@
 }
 ```
 
-- `hostApi` は `HostApi.Version`（今は 1.3）と比べる。`1.x` と `1` はメジャーが同じなら、`1.1` はさらにホストのマイナーが 1 以上なら読み込む。
-- API を足したらマイナーを、互換性のない変更をしたらメジャーを上げる。1.1 では `IShell.RunAsAdministrator` と `ItemAction.Kind` を、1.2 では `ResultItem.Completion` を、1.3 ではプロバイダの属性の `Title` を足した。
+- `hostApi` は `HostApi.Version`（今は 1.4）と比べる。`1.x` と `1` はメジャーが同じなら、`1.1` はさらにホストのマイナーが 1 以上なら読み込む。
+- API を足したらマイナーを、互換性のない変更をしたらメジャーを上げる。1.1 では `IShell.RunAsAdministrator` と `ItemAction.Kind` を、1.2 では `ResultItem.Completion` を、1.3 ではプロバイダの属性の `Title` を、1.4 では `INotifier` を足した。
 
 ## プロバイダの宣言
 
@@ -60,7 +60,7 @@ public sealed class ClipboardPlugin : IChuoPlugin
 - `IPluginContext` は、プラグインの ID、フォルダ、データフォルダ、設定（`settings.json` の `plugins:<id>:settings` のセクション）を持つ。
 - プロバイダはホストが属性をスキャンし、プラグインの子コンテナから生成する。コンストラクタで依存を受け取れる。
 - 常駐処理は `IHostedService` / `BackgroundService` で書く。
-- 本体から中継するサービス：`IShell`、`IClipboard`、`ILauncher`、`ILoggerFactory`（`ILogger<T>`）。`IPluginStorage` は未実装。
+- 本体から中継するサービス：`IShell`、`IClipboard`、`ILauncher`、`INotifier`、`ILoggerFactory`（`ILogger<T>`）。`IPluginStorage` は未実装。
 
 ## 項目とアクション
 

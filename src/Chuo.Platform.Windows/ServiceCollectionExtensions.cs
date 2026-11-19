@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IShell, WindowsShell>();
         services.AddSingleton<IFileIconProvider, FileIconProvider>();
         services.AddSingleton<IAutoStart, AutoStart>();
+        services.AddSingleton<ISystemSound, WindowsSystemSound>();
         return services;
     }
 }

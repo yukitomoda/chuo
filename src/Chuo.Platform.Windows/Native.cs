@@ -179,4 +179,10 @@ internal static unsafe partial class Native
 
     [LibraryImport("user32.dll")]
     public static partial int ReleaseDC(nint hWnd, nint hDC);
+
+    public const uint MB_ICONASTERISK = 0x00000040;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool MessageBeep(uint uType);
 }
