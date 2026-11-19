@@ -109,6 +109,7 @@ public sealed class SkinTests : IDisposable
         _catalog.EnsureDirectory();
 
         Assert.True(File.Exists(Path.Combine(_root, SkinCatalog.SchemaFileName)));
+        Assert.True(File.Exists(Path.Combine(_root, "sample", "skin.jsonc")));
         Assert.Equal("見本", _catalog.Load("sample")!.Name);
 
         // すでにスキンのフォルダがあるときは、見本を作り直さずスキーマだけを更新する
@@ -120,6 +121,21 @@ public sealed class SkinTests : IDisposable
 
         Assert.Equal(SkinCatalog.SchemaJson, File.ReadAllText(Path.Combine(_root, SkinCatalog.SchemaFileName)));
         Assert.False(Directory.Exists(Path.Combine(_root, "sample")));
+    }
+
+    [Fact]
+    public void 従来の_skin_json_も読み込め_skin_jsonc_が優先される()
+    {
+        var folder = Path.Combine(_root, "legacy");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, SkinCatalog.LegacyFileName), """{ "name": "旧スキン" }""");
+
+        Assert.Contains(("legacy", "旧スキン"), _catalog.List());
+        Assert.Equal("旧スキン", _catalog.Load("legacy")!.Name);
+
+        // skin.jsonc を置いたらそちらを優先する
+        File.WriteAllText(Path.Combine(folder, SkinCatalog.FileName), """{ "name": "新スキン" }""");
+        Assert.Equal("新スキン", _catalog.Load("legacy")!.Name);
     }
 
     [Fact]

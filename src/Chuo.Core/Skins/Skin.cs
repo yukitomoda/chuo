@@ -27,7 +27,7 @@ public enum SkinImageStretch
 }
 
 /// <summary>
-/// スキンのフォルダの <c>skin.json</c>（設計 8.1）。省いた値は <see cref="Base"/> の既定を使う。
+/// スキンのフォルダの <c>skin.jsonc</c>（設計 8.1）。省いた値は <see cref="Base"/> の既定を使う。
 /// 色は <c>#RRGGBB</c> か <c>#AARRGGBB</c>。
 /// </summary>
 public sealed class SkinFile
@@ -143,7 +143,9 @@ public sealed class SkinCatalog(string directory)
     public const string Light = "light";
     public const string Dark = "dark";
 
-    public const string FileName = "skin.json";
+    public const string FileName = "skin.jsonc";
+    /// <summary>以前の拡張子。すでにあるスキンのために読み込みだけ対応を残す。</summary>
+    public const string LegacyFileName = "skin.json";
     public const string SchemaFileName = "skin.schema.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -173,7 +175,7 @@ public sealed class SkinCatalog(string directory)
         foreach (var folder in System.IO.Directory.EnumerateDirectories(Directory).Order(StringComparer.OrdinalIgnoreCase))
         {
             var id = Path.GetFileName(folder);
-            if (id is Light or Dark || !File.Exists(Path.Combine(folder, FileName)))
+            if (id is Light or Dark || ResolveFilePath(folder) is null)
             {
                 continue;
             }
@@ -202,9 +204,25 @@ public sealed class SkinCatalog(string directory)
         _ => FromFile(id, Read(id)),
     };
 
-    private SkinFile Read(string id) =>
-        JsonSerializer.Deserialize<SkinFile>(File.ReadAllText(Path.Combine(Directory, id, FileName)), JsonOptions)
-        ?? throw new JsonException("skin.json が空");
+    private SkinFile Read(string id)
+    {
+        var folder = Path.Combine(Directory, id);
+        var path = ResolveFilePath(folder) ?? Path.Combine(folder, FileName);
+        return JsonSerializer.Deserialize<SkinFile>(File.ReadAllText(path), JsonOptions)
+            ?? throw new JsonException($"{Path.GetFileName(path)} が空");
+    }
+
+    /// <summary><c>skin.jsonc</c> を優先し、なければ互換のため <c>skin.json</c> を返す。</summary>
+    private static string? ResolveFilePath(string folder)
+    {
+        var primary = Path.Combine(folder, FileName);
+        if (File.Exists(primary))
+        {
+            return primary;
+        }
+        var legacy = Path.Combine(folder, LegacyFileName);
+        return File.Exists(legacy) ? legacy : null;
+    }
 
     private Skin FromFile(string id, SkinFile file)
     {
@@ -298,12 +316,12 @@ public sealed class SkinCatalog(string directory)
         }
         """;
 
-    /// <summary><c>skin.json</c> の JSON Schema。エディタでの補完と検証のために <c>skins/skin.schema.json</c> に書き出す。</summary>
+    /// <summary><c>skin.jsonc</c> の JSON Schema。エディタでの補完と検証のために <c>skins/skin.schema.json</c> に書き出す。</summary>
     public const string SchemaJson = """
         {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "title": "chuo スキン",
-          "description": "chuo のスキンの設定（skin.json）。省いた値は base の既定を使う。",
+          "description": "chuo のスキンの設定（skin.jsonc）。省いた値は base の既定を使う。",
           "type": "object",
           "additionalProperties": false,
           "properties": {
