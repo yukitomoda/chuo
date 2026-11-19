@@ -87,8 +87,8 @@ public sealed class ReminderCommands(
             .. entries.Select(entry => new ResultItem
             {
                 Id = "item:" + entry.Id,
-                Title = entry.Title,
-                Subtitle = $"{ReminderFormat.FormatDateTime(entry.RemindAt, time.LocalTimeZone)}（{ReminderFormat.FormatRemaining(entry.RemindAt, now)}） ・ Ctrl+Enter で削除",
+                Title = $"{ReminderFormat.FormatDateTime(entry.RemindAt, time.LocalTimeZone)}（{ReminderFormat.FormatRemaining(entry.RemindAt, now)}）",
+                Subtitle = $"{entry.Title} ・ Ctrl+Enter で削除",
                 Actions =
                 [
                     ItemAction.CopyText(entry.Title, "名前をコピー"),

@@ -162,10 +162,12 @@ public sealed class ReminderTests : IDisposable
         Assert.IsType<ActionResult.CloseResult>(outcome);
         Assert.Single(store.List());
 
-        // 一覧に出て、Ctrl+Enter（2番目のアクション）で削除できる
+        // 一覧に出て、タイトルが日時・サブタイトルが名前と削除案内になり、Ctrl+Enter（2番目のアクション）で削除できる
         var list = await commands.QueryAsync(new Query("remind", "", "remind"), CancellationToken.None);
         Assert.Single(list);
-        Assert.Equal("会議", list[0].Title);
+        Assert.Contains("2026/11/19 (木) 10:30", list[0].Title);
+        Assert.Contains("あと 30分", list[0].Title);
+        Assert.Equal("会議 ・ Ctrl+Enter で削除", list[0].Subtitle);
         Assert.Equal("削除", list[0].Actions[1].Title);
 
         await list[0].Actions[1].Execute(actionContext);
