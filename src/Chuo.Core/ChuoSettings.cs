@@ -8,7 +8,7 @@ public sealed class ChuoSettings
     /// <summary>ランチャーを表示するグローバルホットキー（例: <c>Alt+Space</c>）。</summary>
     public string Hotkey { get; set; } = "Alt+Space";
 
-    /// <summary>結果の一覧に表示する最大の件数。</summary>
+    /// <summary>一覧に一度に表示する件数。これを超える候補はスクロールして選ぶ。</summary>
     public int MaxResults { get; set; } = 8;
 
     /// <summary>

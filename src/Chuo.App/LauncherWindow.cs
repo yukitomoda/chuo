@@ -102,9 +102,6 @@ public sealed partial class LauncherWindow : Window
         _results = new ListBox
         {
             ItemTemplate = CreateItemTemplate(),
-            // 並ぶのは最大の件数（既定 8）までなので、仮想化しない。仮想化すると、表示中に中身を入れ替えたとき
-            // 行を作るのが次の描画まで遅れ、スキンの背景の画像の範囲を測れない
-            ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel()),
             Margin = new Thickness(12, 0, 12, 12),
             IsVisible = false,
         };
@@ -113,7 +110,9 @@ public sealed partial class LauncherWindow : Window
         _results.Focusable = false;
         _results.AddHandler(PointerReleasedEvent, (_, e) =>
         {
-            if (e.InitialPressMouseButton == MouseButton.Left)
+            // スクロールバーの操作で項目を実行しないよう、行のクリックだけを対象にする
+            if (e.InitialPressMouseButton == MouseButton.Left
+                && (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not null)
             {
                 ExecuteSelected(0);
             }
@@ -140,7 +139,8 @@ public sealed partial class LauncherWindow : Window
         AddSelectionStyles(_panel);
         _panel.AddHandler(PointerReleasedEvent, (_, e) =>
         {
-            if (e.InitialPressMouseButton == MouseButton.Left)
+            if (e.InitialPressMouseButton == MouseButton.Left
+                && (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not null)
             {
                 ExecutePanelEntry();
             }
@@ -177,6 +177,10 @@ public sealed partial class LauncherWindow : Window
     {
         _prewarming = true;
         Position = new PixelPoint(-32000, -32000);
+        // 画面外に表示している間に1行ぶんの仮の項目を並べて、行の高さと一覧の最大の高さを測っておく
+        _measuringSkin = true;
+        _results.ItemsSource = new[] { new SearchResult(new ResultItem { Id = "measure-0", Title = "A", Subtitle = "A" }, "", 0) };
+        _results.IsVisible = true;
         Show();
         if (TryGetPlatformHandle()?.Handle is { } handle)
         {
@@ -184,6 +188,11 @@ public sealed partial class LauncherWindow : Window
         }
         await WaitForFramesAsync(2);
         _prewarmed = true;
+        CaptureRowMetricsFromRealized();
+        _results.ItemsSource = null;
+        _results.IsVisible = false;
+        _measuringSkin = false;
+        ApplyListMaxHeight();
         UpdateSkinImageArea();
         Hide();
         _prewarming = false;
@@ -683,6 +692,12 @@ public sealed partial class LauncherWindow : Window
             case Key.Up:
                 MoveSelection(-1);
                 break;
+            case Key.PageDown:
+                MoveSelectionClamped(Math.Max(1, _settings.CurrentValue.MaxResults));
+                break;
+            case Key.PageUp:
+                MoveSelectionClamped(-Math.Max(1, _settings.CurrentValue.MaxResults));
+                break;
             case Key.Enter when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
                 // Windows の慣習（スタートメニューやファイル名を指定して実行）に合わせる
                 ExecuteSelected(ItemActionKind.RunAsAdministrator);
@@ -755,6 +770,18 @@ public sealed partial class LauncherWindow : Window
         _input.CaretIndex == (_input.Text?.Length ?? 0) && _input.SelectionStart == _input.SelectionEnd;
 
     private void MoveSelection(int delta) => MoveSelection(_results, delta);
+
+    private void MoveSelectionClamped(int delta)
+    {
+        var count = _results.ItemCount;
+        if (count == 0)
+        {
+            return;
+        }
+        var current = Math.Max(0, _results.SelectedIndex);
+        _results.SelectedIndex = Math.Clamp(current + delta, 0, count - 1);
+        _results.ScrollIntoView(_results.SelectedIndex);
+    }
 
     private static void MoveSelection(ListBox list, int delta)
     {

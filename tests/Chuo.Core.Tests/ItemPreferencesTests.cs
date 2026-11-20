@@ -86,8 +86,7 @@ public sealed class SearchWithPreferencesTests : IDisposable
     public SearchWithPreferencesTests()
     {
         _preferences = new ItemPreferences(Path.Combine(_directory, "items.json"), NullLogger<ItemPreferences>.Instance);
-        _search = new SearchService(
-            _registry, new StaticOptionsMonitor<ChuoSettings>(new ChuoSettings()), NullLogger<SearchService>.Instance, _preferences);
+        _search = new SearchService(_registry, NullLogger<SearchService>.Instance, _preferences);
         var catalog = new ProviderCatalog();
         catalog.ReplaceAll(new[] { "Firefox", "Fire Tool", "Files", "Uninstall Fire" }.Select(t => new CatalogItem { Id = t, Title = t }));
         _registry.Add(new CatalogRegistration("apps", "Test", catalog, null, IncludeInGlobal: true));

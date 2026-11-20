@@ -4,7 +4,6 @@ using Chuo.Abstractions;
 using Chuo.Core.Items;
 using Chuo.Core.Text;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Chuo.Core.Search;
 
@@ -31,7 +30,7 @@ public sealed record SearchResult(ResultItem Item, string PluginId, int Score)
 /// エイリアスとお気に入りは加点し、無視した項目は除く（要件定義書 3.2、6 章）。
 /// </summary>
 public sealed class SearchService(
-    ProviderRegistry registry, IOptionsMonitor<ChuoSettings> settings, ILogger<SearchService> logger, ItemPreferences? preferences = null)
+    ProviderRegistry registry, ILogger<SearchService> logger, ItemPreferences? preferences = null)
 {
     /// <summary>無視した項目の一覧を出すコマンド（要件定義書 6.3）。</summary>
     public const string IgnoredCommand = ":ignored";
@@ -56,7 +55,6 @@ public sealed class SearchService(
 
     private async Task<IReadOnlyList<SearchResult>> SearchCoreAsync(string text, CancellationToken cancellationToken)
     {
-        var limit = Math.Max(1, settings.CurrentValue.MaxResults);
         var preference = preferences?.Current ?? ItemPreferenceSnapshot.Empty;
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -64,12 +62,11 @@ public sealed class SearchService(
             return [.. preference.FavoritesInOrder
                 .Where(id => !preference.IsIgnored(id))
                 .Select(Find)
-                .OfType<SearchResult>()
-                .Take(limit)];
+                .OfType<SearchResult>()];
         }
         if (text == IgnoredCommand || text.StartsWith(IgnoredCommand + " ", StringComparison.Ordinal))
         {
-            return SearchIgnored(preference, text[IgnoredCommand.Length..].Trim(), limit);
+            return SearchIgnored(preference, text[IgnoredCommand.Length..].Trim());
         }
 
         var (keyword, body) = SplitKeyword(text);
@@ -100,7 +97,7 @@ public sealed class SearchService(
         var liveTask = QueryLiveAsync(liveQueries, cancellationToken);
         // 補完はキーワードを含まないので、入力欄の文字列にするためにキーワードの部分を前に付ける
         var completionPrefix = text[..^catalogPattern.Length];
-        var catalogResults = SearchCatalogs(catalogs, TextNormalizer.Normalize(catalogPattern.Trim()), preference, limit, cancellationToken)
+        var catalogResults = SearchCatalogs(catalogs, TextNormalizer.Normalize(catalogPattern.Trim()), preference, cancellationToken)
             .Select(r => WithCompletion(r, completionPrefix))
             .ToList();
         var liveResults = (await liveTask).Where(r => !preference.IsIgnored(r.GlobalId));
@@ -109,8 +106,7 @@ public sealed class SearchService(
         // その次に置く
         return [.. catalogResults.TakeWhile(r => r.Score >= AliasExactScore)
             .Concat(liveResults)
-            .Concat(catalogResults.SkipWhile(r => r.Score >= AliasExactScore))
-            .Take(limit)];
+            .Concat(catalogResults.SkipWhile(r => r.Score >= AliasExactScore))];
     }
 
     private static SearchResult WithCompletion(SearchResult result, string prefix) =>
@@ -119,7 +115,7 @@ public sealed class SearchService(
     /// <summary>
     /// 無視した項目を出す。カタログにない項目（プラグインを外した、ライブクエリの結果など）は、識別子だけを出す。
     /// </summary>
-    private List<SearchResult> SearchIgnored(ItemPreferenceSnapshot preference, string pattern, int limit)
+    private List<SearchResult> SearchIgnored(ItemPreferenceSnapshot preference, string pattern)
     {
         var normalized = TextNormalizer.Normalize(pattern);
         var results = new List<SearchResult>();
@@ -132,7 +128,7 @@ public sealed class SearchService(
                 results.Add(result with { Score = score.Value });
             }
         }
-        return [.. results.OrderByDescending(r => r.Score).ThenBy(r => r.Item.Title, StringComparer.CurrentCulture).Take(limit)];
+        return [.. results.OrderByDescending(r => r.Score).ThenBy(r => r.Item.Title, StringComparer.CurrentCulture)];
     }
 
     /// <summary>グローバルな識別子から項目を探す。カタログにない項目は、識別子をタイトルにした項目を返す。</summary>
@@ -176,7 +172,7 @@ public sealed class SearchService(
     }
 
     private static List<SearchResult> SearchCatalogs(
-        IEnumerable<CatalogRegistration> catalogs, string pattern, ItemPreferenceSnapshot preference, int limit, CancellationToken cancellationToken)
+        IEnumerable<CatalogRegistration> catalogs, string pattern, ItemPreferenceSnapshot preference, CancellationToken cancellationToken)
     {
         var results = new List<SearchResult>();
         foreach (var registration in catalogs)
@@ -214,7 +210,6 @@ public sealed class SearchService(
         return results
             .OrderByDescending(r => r.Score)
             .ThenBy(r => r.Item.Title, StringComparer.CurrentCulture)
-            .Take(limit)
             .ToList();
     }
 

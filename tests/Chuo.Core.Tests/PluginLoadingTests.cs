@@ -46,7 +46,7 @@ public class PluginLoadingTests
         var manager = new PluginManager(
             registry, new ServiceCollection().BuildServiceProvider(), new ConfigurationBuilder().Build(), options,
             NullLogger<PluginManager>.Instance);
-        var search = new SearchService(registry, new StaticSettings(), NullLogger<SearchService>.Instance);
+        var search = new SearchService(registry, NullLogger<SearchService>.Instance);
 
         await manager.StartAsync(cancellationToken);
         var results = await search.SearchAsync("1+2*3", cancellationToken);

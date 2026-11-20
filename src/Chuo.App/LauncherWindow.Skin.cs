@@ -44,8 +44,14 @@ public sealed partial class LauncherWindow
     private Bitmap? _skinImage;
     /// <summary>ウィンドウを一度表示し、部品のテンプレートができた。</summary>
     private bool _prewarmed;
-    /// <summary>背景の画像の範囲を測るため、仮の候補を並べている。選択の変化などに反応しない。</summary>
+    /// <summary>初回の表示で行の高さを測っている。選択の変化などに反応しない。</summary>
     private bool _measuringSkin;
+    /// <summary>実際に描画した行から測った1行の高さ。スキンを変えたら 0 に戻して測り直す。</summary>
+    private double _measuredRowHeight;
+    /// <summary>スキンを変えた直後（まだ行を描画していない間）の仮の1行の高さ。</summary>
+    private double _fallbackRowHeight = 56;
+    /// <summary>入力欄など、一覧以外の部分の高さ。</summary>
+    private double _measuredChromeHeight = 68;
 
     /// <summary>
     /// 部品のプロパティを、リソースに結びつける。スキンが値を決めていないリソースはないので、部品の既定（Fluent の色）になる。
@@ -68,8 +74,19 @@ public sealed partial class LauncherWindow
                 OnSkinRootBoundsChanged();
             }
         };
-        // 最大の件数を変えたら、背景の画像を敷く範囲を測り直す
-        _settings.OnChange((_, _) => Dispatcher.UIThread.Post(UpdateSkinImageArea));
+        _results.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == BoundsProperty)
+            {
+                OnSkinRootBoundsChanged();
+            }
+        };
+        // 一度に表示する件数を変えたら、一覧の最大の高さと背景の画像を敷く範囲を更新する
+        _settings.OnChange((_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            ApplyListMaxHeight();
+            UpdateSkinImageArea();
+        }));
     }
 
     /// <summary>スキンを反映する。null なら OS のライト／ダークに従い、同梱のライトとダークを使い分ける。UI スレッドで呼ぶ。</summary>
@@ -127,14 +144,75 @@ public sealed partial class LauncherWindow
                 Opacity = skin.BackgroundImageOpacity,
             };
         previous?.Dispose();
+        // 文字の大きさが変わったかもしれないので、行の高さを測り直す
+        _measuredRowHeight = 0;
+        _fallbackRowHeight = Math.Max(32, current.TitleFontSize * 1.4 + current.SubtitleFontSize * 1.4) + 20;
+        ApplyListMaxHeight();
         // リソースの変更（文字の大きさなど）が部品に届き、画面を作り直した後に測る
-        Dispatcher.UIThread.Post(UpdateSkinImageArea, DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (CaptureRowMetricsFromRealized())
+            {
+                ApplyListMaxHeight();
+            }
+            UpdateSkinImageArea();
+        }, DispatcherPriority.Background);
     }
 
     /// <summary>
-    /// 背景の画像を敷く範囲を、候補を最大の件数まで並べたときの大きさに固定する。ウィンドウの大きさに合わせると、
+    /// 一度に画面に出す件数（<see cref="ChuoSettings.MaxResults"/>）ぶんの高さに一覧の上限を合わせる。
+    /// これを超える候補はスクロールで選べる。
+    /// </summary>
+    private void ApplyListMaxHeight()
+    {
+        var count = Math.Max(1, _settings.CurrentValue.MaxResults);
+        var rowHeight = _measuredRowHeight > 0 ? _measuredRowHeight : _fallbackRowHeight;
+        var overhead = _results.Padding.Top + _results.Padding.Bottom + _results.BorderThickness.Top + _results.BorderThickness.Bottom;
+        var maxHeight = Math.Ceiling(rowHeight * count + overhead);
+        _results.MaxHeight = maxHeight;
+        _panel.MaxHeight = maxHeight;
+    }
+
+    /// <summary>
+    /// 実際に並んでいる行から、1行の高さと一覧以外の高さを取る。
+    /// 候補の一覧は仮想化しているが、画面に出ている行は作られているので、その最も高い行から求められる。
+    /// </summary>
+    private bool CaptureRowMetricsFromRealized()
+    {
+        if (!_results.IsVisible)
+        {
+            return false;
+        }
+        var rows = _results.GetRealizedContainers().Select(c => c.Bounds.Height).Where(h => h > 0).ToList();
+        if (rows.Count == 0)
+        {
+            return false;
+        }
+        var tallest = rows.Max();
+        var updated = false;
+        if (tallest > _measuredRowHeight + 0.5)
+        {
+            _measuredRowHeight = tallest;
+            updated = true;
+        }
+        if (_skinRoot.Bounds.Height > _results.Bounds.Height)
+        {
+            _measuredChromeHeight = _skinRoot.Bounds.Height - _results.Bounds.Height;
+        }
+        return updated;
+    }
+
+    private double CurrentMaxWindowHeight()
+    {
+        var count = Math.Max(1, _settings.CurrentValue.MaxResults);
+        var rowHeight = _measuredRowHeight > 0 ? _measuredRowHeight : _fallbackRowHeight;
+        var overhead = _results.Padding.Top + _results.Padding.Bottom + _results.BorderThickness.Top + _results.BorderThickness.Bottom;
+        return _measuredChromeHeight + Math.Ceiling(rowHeight * count + overhead);
+    }
+
+    /// <summary>
+    /// 背景の画像を敷く範囲を、一覧の最大の高さのときの大きさに固定する。ウィンドウの大きさに合わせると、
     /// 候補の数で高さが変わるたびに画像の拡大率が変わり、がたつくため。低いときは、下の部分が切れて見える。
-    /// 測るには部品のテンプレートが要るので、ウィンドウを一度表示した（<see cref="PrewarmAsync"/>）後に行う。
     /// </summary>
     private void UpdateSkinImageArea()
     {
@@ -142,86 +220,32 @@ public sealed partial class LauncherWindow
         {
             return;
         }
-        var height = EstimateMaxHeightFromRows() ?? MeasureMaxHeight();
+        var height = Math.Max(_skinRoot.Bounds.Height, CurrentMaxWindowHeight());
         brush.DestinationRect = new RelativeRect(0, 0, Width, height, RelativeUnit.Absolute);
     }
 
     /// <summary>
-    /// 候補を最大の件数（タイトルとサブタイトルのある行）まで並べたときの、ウィンドウの中身の高さ。
-    /// 一覧は仮想化しない（<see cref="LauncherWindow"/> の生成を参照）ので、並べればすぐに測れる。
-    /// </summary>
-    private double MeasureMaxHeight()
-    {
-        var count = Math.Max(1, _settings.CurrentValue.MaxResults);
-        var (items, visible, selected) = (_results.ItemsSource, _results.IsVisible, _results.SelectedIndex);
-        var panelVisible = _panelArea.IsVisible;
-        _measuringSkin = true;
-        try
-        {
-            _results.ItemsSource = Enumerable.Range(0, count)
-                .Select(i => new SearchResult(new ResultItem { Id = $"measure-{i}", Title = "A", Subtitle = "A" }, "", 0))
-                .ToList();
-            _results.IsVisible = true;
-            _panelArea.IsVisible = false;
-            // 一覧の中身を変えても、外側の部品は前回の測り方のままで、測り直さずに前の大きさを返す。
-            // 一覧から外側まで、測り直しの印を付けてから測る
-            InvalidateMeasureUpToRoot();
-            _skinRoot.Measure(new Size(Width, double.PositiveInfinity));
-            return _skinRoot.DesiredSize.Height;
-        }
-        finally
-        {
-            _results.ItemsSource = items;
-            _results.IsVisible = visible;
-            _results.SelectedIndex = selected;
-            _panelArea.IsVisible = panelVisible;
-            _measuringSkin = false;
-            InvalidateMeasureUpToRoot();
-        }
-    }
-
-    private void InvalidateMeasureUpToRoot()
-    {
-        for (Visual? visual = _results; visual is not null; visual = visual.GetVisualParent())
-        {
-            (visual as Layoutable)?.InvalidateMeasure();
-            if (visual == _skinRoot)
-            {
-                break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// 実際に並んでいる行の高さから、候補を最大の件数まで並べたときの高さを求め、画像を敷く範囲がそれより狭ければ広げる。
-    /// 表示中にスキンを変えると、仮の候補では正しく測れない（部品の形が次の描画まで作られない）ため。
-    /// 行の高さはサブタイトルの有無で変わるので、並んでいる行の最も高いものを使い、範囲は広げるだけにする（がたつかないように）。
+    /// 実際に並んでいる行の高さが今までの計測より大きければ、一覧の上限と画像を敷く範囲を広げる。
+    /// 表示中にスキンを変えたときや、サブタイトルのない行しか並んでいなかった後からサブタイトル付きの行が出たときに追従する。
     /// </summary>
     private void OnSkinRootBoundsChanged()
     {
-        if (_measuringSkin || _skinRoot.Background is not ImageBrush { DestinationRect: { Unit: RelativeUnit.Absolute } rect } brush)
+        if (_measuringSkin || !IsVisible)
         {
             return;
         }
-        var needed = Math.Max(_skinRoot.Bounds.Height, EstimateMaxHeightFromRows() ?? 0);
-        if (needed > rect.Rect.Height + 0.5)
+        if (CaptureRowMetricsFromRealized())
         {
-            brush.DestinationRect = new RelativeRect(0, 0, Width, needed, RelativeUnit.Absolute);
+            ApplyListMaxHeight();
         }
-    }
-
-    /// <summary>
-    /// 並んでいる行から、候補を最大の件数まで並べたときの高さを求める。行が並んでいない（まだ描画していない）ときは null。
-    /// </summary>
-    private double? EstimateMaxHeightFromRows()
-    {
-        if (!IsVisible || !_results.IsVisible
-            || _results.GetRealizedContainers().Select(c => c.Bounds.Height).ToList() is not { Count: > 0 } rows || rows.Contains(0))
+        if (_skinRoot.Background is ImageBrush { DestinationRect: { Unit: RelativeUnit.Absolute } rect } brush)
         {
-            return null;
+            var needed = Math.Max(_skinRoot.Bounds.Height, CurrentMaxWindowHeight());
+            if (needed > rect.Rect.Height + 0.5)
+            {
+                brush.DestinationRect = new RelativeRect(0, 0, Width, needed, RelativeUnit.Absolute);
+            }
         }
-        var count = Math.Max(1, _settings.CurrentValue.MaxResults);
-        return _skinRoot.Bounds.Height - rows.Sum() + rows.Max() * count;
     }
 
     private static ResourceDictionary CreateResources(Skin skin)

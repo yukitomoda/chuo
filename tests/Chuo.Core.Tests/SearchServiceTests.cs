@@ -8,10 +8,9 @@ namespace Chuo.Core.Tests;
 public class SearchServiceTests
 {
     private readonly ProviderRegistry _registry = new();
-    private readonly ChuoSettings _settings = new();
 
     private SearchService CreateService() =>
-        new(_registry, new StaticOptionsMonitor<ChuoSettings>(_settings), NullLogger<SearchService>.Instance);
+        new(_registry, NullLogger<SearchService>.Instance);
 
     private ProviderCatalog AddCatalog(string pluginId, string? keyword, bool includeInGlobal, params string[] titles)
     {
@@ -132,14 +131,13 @@ public class SearchServiceTests
     }
 
     [Fact]
-    public async Task 最大件数で切り詰める()
+    public async Task 候補の件数に上限を設けずすべて返す()
     {
-        _settings.MaxResults = 2;
-        AddCatalog("apps", null, true, "a1", "a2", "a3");
+        AddCatalog("apps", null, true, Enumerable.Range(1, 20).Select(i => $"app{i:D2}").ToArray());
 
-        var results = await CreateService().SearchAsync("a", TestContext.Current.CancellationToken);
+        var results = await CreateService().SearchAsync("app", TestContext.Current.CancellationToken);
 
-        Assert.Equal(2, results.Count);
+        Assert.Equal(20, results.Count);
     }
 
     [Fact]

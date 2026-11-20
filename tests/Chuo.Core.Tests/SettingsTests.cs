@@ -232,7 +232,7 @@ public class ProviderOverrideTests
         var catalog = new ProviderCatalog();
         catalog.ReplaceAll([new CatalogItem { Id = "1", Title = "Firefox" }]);
         registry.Add(new CatalogRegistration("chuo.shortcuts", "ShortcutCatalogProvider", catalog, "l", IncludeInGlobal: true));
-        var search = new SearchService(registry, new StaticOptionsMonitor<ChuoSettings>(new ChuoSettings()), NullLogger<SearchService>.Instance);
+        var search = new SearchService(registry, NullLogger<SearchService>.Instance);
         var results = await search.SearchAsync(text, TestContext.Current.CancellationToken);
         return [.. results.Select(r => r.Item.Title)];
     }
