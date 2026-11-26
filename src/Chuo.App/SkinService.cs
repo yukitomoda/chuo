@@ -41,7 +41,7 @@ public sealed class SkinService : IDisposable
         WatchDirectory();
     }
 
-    public SkinCatalog Catalog { get; } = new(ChuoPaths.SkinDirectory);
+    public SkinCatalog Catalog { get; } = new(ChuoPaths.SkinDirectory, ChuoPaths.BundledSkinDirectory);
 
     /// <summary>今のスキン。null なら OS のライト／ダークに従う。</summary>
     public Skin? Current { get; private set; }

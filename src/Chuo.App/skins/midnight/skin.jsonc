@@ -1,0 +1,18 @@
+{
+  "name": "ミッドナイト",
+  "base": "dark",
+  "colors": {
+    "background": "#181B28",
+    "text": "#E6EAF5",
+    "subtext": "#9AA5C4",
+    "inputBackground": "#22263A",
+    "inputBorder": "#5B7CFA",
+    "selected": "#2E3654",
+    "selectedHover": "#374166",
+    "hover": "#242940",
+    "admin": "#6E4922",
+    "error": "#F38BA8",
+    "link": "#7AA2F7",
+    "separator": "#4D7AA2F7"
+  }
+}

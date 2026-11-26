@@ -26,6 +26,9 @@ public static class ChuoPaths
     /// <summary>本体に同梱するプラグインのフォルダ。</summary>
     public static string BundledPluginDirectory => Path.Combine(AppContext.BaseDirectory, "plugins");
 
+    /// <summary>本体に同梱するプリセットスキンのフォルダ。</summary>
+    public static string BundledSkinDirectory => Path.Combine(AppContext.BaseDirectory, "skins");
+
     /// <summary>プラグインごとのデータのフォルダ。</summary>
     public static string PluginDataDirectory(string pluginId) => Path.Combine(DataDirectory, "plugin-data", pluginId);
 

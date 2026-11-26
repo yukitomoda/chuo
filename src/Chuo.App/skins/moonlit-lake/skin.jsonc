@@ -1,0 +1,23 @@
+{
+  "name": "月夜の湖",
+  "base": "dark",
+  "colors": {
+    "background": "#0E172A",
+    "text": "#F2F6FF",
+    "subtext": "#DCE8FF",
+    "inputBackground": "#B8111D35",
+    "inputBorder": "#7B9ED9",
+    "selected": "#B82B4670",
+    "selectedHover": "#CC365687",
+    "hover": "#80203556",
+    "admin": "#CC7A5120",
+    "error": "#F58E9F",
+    "link": "#9EC5FF",
+    "separator": "#557B9ED9"
+  },
+  "backgroundImage": {
+    "path": "moonlit-lake.png",
+    "opacity": 0.55,
+    "stretch": "uniformToFill"
+  }
+}

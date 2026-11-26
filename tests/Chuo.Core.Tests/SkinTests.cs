@@ -139,6 +139,57 @@ public sealed class SkinTests : IDisposable
     }
 
     [Fact]
+    public void 同梱のプリセットスキンが一覧に並び_同じIDのユーザースキンがあればそちらを優先する()
+    {
+        var bundled = Path.Combine(_root, "bundled");
+        var user = Path.Combine(_root, "user");
+        Directory.CreateDirectory(Path.Combine(bundled, "preset-a"));
+        File.WriteAllText(Path.Combine(bundled, "preset-a", SkinCatalog.FileName), """{ "name": "プリセットA", "base": "dark" }""");
+        Directory.CreateDirectory(Path.Combine(bundled, "preset-b"));
+        File.WriteAllText(Path.Combine(bundled, "preset-b", SkinCatalog.FileName), """{ "name": "プリセットB", "base": "light" }""");
+
+        var catalog = new SkinCatalog(user, bundled);
+
+        Assert.Equal(
+            [
+                (SkinCatalog.FollowSystem, "OS に従う"),
+                (SkinCatalog.Light, "ライト"),
+                (SkinCatalog.Dark, "ダーク"),
+                ("preset-a", "プリセットA"),
+                ("preset-b", "プリセットB"),
+            ],
+            catalog.List());
+        Assert.Equal("プリセットA", catalog.Load("preset-a")!.Name);
+
+        // ユーザーが同じ ID のスキンを置くと上書きされる
+        Directory.CreateDirectory(Path.Combine(user, "preset-a"));
+        File.WriteAllText(Path.Combine(user, "preset-a", SkinCatalog.FileName), """{ "name": "自作A", "base": "light" }""");
+
+        Assert.Contains(("preset-a", "自作A"), catalog.List());
+        Assert.Equal(1, catalog.List().Count(s => s.Id == "preset-a"));
+        Assert.Equal(SkinBase.Light, catalog.Load("preset-a")!.Base);
+    }
+
+    [Fact]
+    public void アプリに同梱するすべてのプリセットスキンが読み込め_背景画像も存在する()
+    {
+        var bundled = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "Chuo.App", "skins"));
+        var catalog = new SkinCatalog(Path.Combine(_root, "empty-user"), bundled);
+        var presets = catalog.List().Skip(3).ToList();
+
+        Assert.Equal(5, presets.Count);
+        foreach (var (id, _) in presets)
+        {
+            var skin = catalog.Load(id);
+            Assert.NotNull(skin);
+            if (skin.BackgroundImagePath is { } imagePath)
+            {
+                Assert.True(File.Exists(imagePath), $"背景画像が見つからない: {imagePath}");
+            }
+        }
+    }
+
+    [Fact]
     public void スキーマは_SkinFile_のすべての項目と選択肢を持つ()
     {
         using var doc = JsonDocument.Parse(SkinCatalog.SchemaJson);

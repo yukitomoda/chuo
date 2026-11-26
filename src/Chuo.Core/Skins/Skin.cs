@@ -134,9 +134,9 @@ public sealed record SkinPalette(
     string Separator);
 
 /// <summary>
-/// 同梱のスキン（ライトとダーク）と、設定のフォルダの <c>skins/</c> に置いたスキンの一覧と読み込み（設計 8.1）。
+/// 同梱のスキン（ライト、ダーク、プリセット）と、設定のフォルダの <c>skins/</c> に置いたスキンの一覧と読み込み（設計 8.1）。
 /// </summary>
-public sealed class SkinCatalog(string directory)
+public sealed class SkinCatalog(string directory, string? bundledDirectory = null)
 {
     /// <summary>OS のライト／ダークに従う（設定の既定）。</summary>
     public const string FollowSystem = "";
@@ -159,37 +159,60 @@ public sealed class SkinCatalog(string directory)
 
     public string Directory { get; } = directory;
 
+    /// <summary>本体に同梱するプリセットスキンのフォルダ。なければ null。</summary>
+    public string? BundledDirectory { get; } = bundledDirectory;
+
     /// <summary>同梱のスキン。今のランチャーの見た目と同じ値。</summary>
     public static Skin BuiltIn(SkinBase @base) => @base == SkinBase.Dark
         ? Create(Dark, "ダーク", @base, null, null, null)
         : Create(Light, "ライト", @base, null, null, null);
 
-    /// <summary>選べるスキン（OS に従う、ライト、ダーク、置いたスキンの順）。</summary>
+    /// <summary>選べるスキン（OS に従う、ライト、ダーク、プリセット、ユーザーが置いたスキンの順）。</summary>
     public IReadOnlyList<(string Id, string Name)> List()
     {
-        List<(string, string)> skins = [(FollowSystem, "OS に従う"), (Light, "ライト"), (Dark, "ダーク")];
-        if (!System.IO.Directory.Exists(Directory))
+        List<(string Id, string Name)> skins = [(FollowSystem, "OS に従う"), (Light, "ライト"), (Dark, "ダーク")];
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { FollowSystem, Light, Dark };
+
+        void AddFrom(string? root, bool overrideExisting)
         {
-            return skins;
+            if (root is null || !System.IO.Directory.Exists(root))
+            {
+                return;
+            }
+            foreach (var folder in System.IO.Directory.EnumerateDirectories(root).Order(StringComparer.OrdinalIgnoreCase))
+            {
+                var id = Path.GetFileName(folder);
+                if (id is Light or Dark || ResolveFilePath(folder) is null)
+                {
+                    continue;
+                }
+                string name;
+                try
+                {
+                    name = ReadFromFolder(folder).Name ?? id;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+                {
+                    name = id;
+                }
+                if (seen.Add(id))
+                {
+                    skins.Add((id, name));
+                }
+                else if (overrideExisting)
+                {
+                    // ユーザーが同じ ID のスキンを置いていれば、表示名もそちらを優先する
+                    var index = skins.FindIndex(s => s.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+                    if (index >= 0)
+                    {
+                        skins[index] = (id, name);
+                    }
+                }
+            }
         }
-        foreach (var folder in System.IO.Directory.EnumerateDirectories(Directory).Order(StringComparer.OrdinalIgnoreCase))
-        {
-            var id = Path.GetFileName(folder);
-            if (id is Light or Dark || ResolveFilePath(folder) is null)
-            {
-                continue;
-            }
-            string name;
-            try
-            {
-                name = Read(id).Name ?? id;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-            {
-                name = id;
-            }
-            skins.Add((id, name));
-        }
+
+        AddFrom(BundledDirectory, overrideExisting: false);
+        AddFrom(Directory, overrideExisting: true);
         return skins;
     }
 
@@ -201,12 +224,36 @@ public sealed class SkinCatalog(string directory)
         FollowSystem => null,
         Light => BuiltIn(SkinBase.Light),
         Dark => BuiltIn(SkinBase.Dark),
-        _ => FromFile(id, Read(id)),
+        _ => LoadFromDirectory(id),
     };
 
-    private SkinFile Read(string id)
+    private Skin LoadFromDirectory(string id)
     {
-        var folder = Path.Combine(Directory, id);
+        var folder = ResolveSkinFolder(id);
+        return FromFile(id, folder, ReadFromFolder(folder));
+    }
+
+    /// <summary>ユーザーのスキンのフォルダを優先し、なければ同梱のプリセットスキンのフォルダを返す。</summary>
+    private string ResolveSkinFolder(string id)
+    {
+        var userFolder = Path.Combine(Directory, id);
+        if (ResolveFilePath(userFolder) is not null)
+        {
+            return userFolder;
+        }
+        if (BundledDirectory is not null)
+        {
+            var bundledFolder = Path.Combine(BundledDirectory, id);
+            if (ResolveFilePath(bundledFolder) is not null)
+            {
+                return bundledFolder;
+            }
+        }
+        return userFolder;
+    }
+
+    private static SkinFile ReadFromFolder(string folder)
+    {
         var path = ResolveFilePath(folder) ?? Path.Combine(folder, FileName);
         return JsonSerializer.Deserialize<SkinFile>(File.ReadAllText(path), JsonOptions)
             ?? throw new JsonException($"{Path.GetFileName(path)} が空");
@@ -224,10 +271,10 @@ public sealed class SkinCatalog(string directory)
         return File.Exists(legacy) ? legacy : null;
     }
 
-    private Skin FromFile(string id, SkinFile file)
+    private static Skin FromFile(string id, string folder, SkinFile file)
     {
         var image = file.BackgroundImage?.Path is { Length: > 0 } path
-            ? Path.GetFullPath(Path.Combine(Directory, id, path))
+            ? Path.GetFullPath(Path.Combine(folder, path))
             : null;
         return Create(id, file.Name ?? id, file.Base, file.Font, file.Window, file.Colors) with
         {

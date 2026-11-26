@@ -1,0 +1,23 @@
+{
+  "name": "朝の渓谷",
+  "base": "light",
+  "colors": {
+    "background": "#EAF1EC",
+    "text": "#1A2E26",
+    "subtext": "#1A2E26",
+    "inputBackground": "#D9FFFFFF",
+    "inputBorder": "#6D9280",
+    "selected": "#B8C4DDD0",
+    "selectedHover": "#CCB2D1C2",
+    "hover": "#85DCEBE3",
+    "admin": "#CCF6D1A2",
+    "error": "#B84242",
+    "link": "#255E4A",
+    "separator": "#555C7D6D"
+  },
+  "backgroundImage": {
+    "path": "morning-valley.png",
+    "opacity": 0.55,
+    "stretch": "uniformToFill"
+  }
+}

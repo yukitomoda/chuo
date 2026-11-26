@@ -1,0 +1,18 @@
+{
+  "name": "ウォームペーパー",
+  "base": "light",
+  "colors": {
+    "background": "#F6F1E7",
+    "text": "#332C24",
+    "subtext": "#75695B",
+    "inputBackground": "#FDFBF7",
+    "inputBorder": "#C4A47C",
+    "selected": "#E7DAC3",
+    "selectedHover": "#DFCEB2",
+    "hover": "#EFE7D8",
+    "admin": "#F5C993",
+    "error": "#B8433E",
+    "link": "#8B5A2B",
+    "separator": "#4D9E8B73"
+  }
+}

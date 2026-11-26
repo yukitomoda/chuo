@@ -1,0 +1,23 @@
+{
+  "name": "夕暮れの海岸",
+  "base": "dark",
+  "colors": {
+    "background": "#231A2D",
+    "text": "#FFF6EE",
+    "subtext": "#F2DDD0",
+    "inputBackground": "#BF241A2E",
+    "inputBorder": "#E89D72",
+    "selected": "#BF6A3D58",
+    "selectedHover": "#CC7D4867",
+    "hover": "#854D2F45",
+    "admin": "#CCA65C24",
+    "error": "#FF8FA3",
+    "link": "#FFB98A",
+    "separator": "#55E89D72"
+  },
+  "backgroundImage": {
+    "path": "amber-coast.png",
+    "opacity": 0.48,
+    "stretch": "uniformToFill"
+  }
+}

@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <None Include="skins\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
